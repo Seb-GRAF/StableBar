@@ -53,16 +53,20 @@ final class ConfigurationStore {
             let data = try SetupPreferences(placement: placement, workspaces: workspaces).applying(to: starter)
             try writeConfiguration(data, to: sharedConfigurationURL)
         }
-        // The colors go first: they skip a file pinned to a release, and the other migrations pin it.
+        // The colors go first: they skip a file pinned to a release, and the other migrations pin it. The retired themes
+        // skip only a file that was already pinned to this release, so its pin is read before any of them.
+        let pinned = pinnedRelease(sharedConfigurationURL)
         try migrateEarlierColors(sharedConfigurationURL, savedBy: release)
         try migrateConfigurationFile(sharedConfigurationURL, savedBy: release)
         try migrateStarterAppleLogo(sharedConfigurationURL, savedBy: release)
-        try migrateRetiredThemes(sharedConfigurationURL, themes: themesDirectory, storeThemes: storeThemesDirectory, savedBy: release)
+        try? migrateRetiredThemes(sharedConfigurationURL, pinned: pinned, themes: themesDirectory, storeThemes: storeThemesDirectory,
+                                  savedBy: release)
         for url in screenSetupsWithOwnBars.map(ownBarURL(for:)) {
+            let pinned = pinnedRelease(url)
             try? migrateEarlierColors(url, savedBy: release)
             try? migrateConfigurationFile(url, savedBy: release)
             try? migrateStarterAppleLogo(url, savedBy: release)
-            try? migrateRetiredThemes(url, themes: themesDirectory, storeThemes: storeThemesDirectory, savedBy: release)
+            try? migrateRetiredThemes(url, pinned: pinned, themes: themesDirectory, storeThemes: storeThemesDirectory, savedBy: release)
         }
         // Earlier setups put a bar below the menu bar at the status bar's thickness or the main display's notch height.
         // Once, while the menu bar shows and covers part of such a bar, it moves under each display's own menu bar.
@@ -228,6 +232,11 @@ final class ConfigurationStore {
 
     func ownBarURL(for setup: ScreenSetup) -> URL {
         sharedConfigurationURL.deletingLastPathComponent().appending(path: setup.fileName)
+    }
+
+    private func pinnedRelease(_ url: URL) -> String? {
+        let document = try? JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: url))
+        return ConfigurationSchema.release(document?["$schema"])
     }
 
     /// Select the bar before launch can open Settings or setup, without starting its sources yet.

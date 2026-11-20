@@ -4,24 +4,13 @@ import SwiftUI
 /// What previews of the bar show behind it: the Mac's wallpaper when it's one of Apple's, otherwise a drawn backdrop in
 /// the preview's appearance. Offscreen, it shows the scene's wallpaper or the backdrop, never the Mac's wallpaper.
 struct SampleWallpaper: View {
-    /// The main screen's wallpaper, read once at a size that many previews draw quickly. Only Apple's wallpapers, in
-    /// /System or /Library, are read: a picture in the home folder, iCloud or another app's data can show a privacy prompt.
-    static let desktop: NSImage? = {
-        guard let screen = NSScreen.screens.first, let url = NSWorkspace.shared.desktopImageURL(for: screen),
-              url.path.hasPrefix("/System/") || url.path.hasPrefix("/Library/"),
-              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
-                                                                           kCGImageSourceThumbnailMaxPixelSize: 1200] as CFDictionary)
-        else { return nil }
-        return NSImage(cgImage: image, size: .zero)
-    }()
     @Environment(\.offscreenSnapshot) private var offscreen
     @Environment(\.sceneWallpaper) private var sceneWallpaper
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Group {
-            if let image = offscreen ? sceneWallpaper : Self.desktop {
+            if let image = offscreen ? sceneWallpaper : DesktopWallpaper.shared.image {
                 Color.clear.overlay(alignment: .top) { Image(nsImage: image).resizable().scaledToFill() }.clipped()
             } else {
                 backdrop
@@ -46,6 +35,29 @@ struct SampleWallpaper: View {
 
     private func glow(_ color: UInt32, at center: UnitPoint, size: CGFloat) -> some View {
         EllipticalGradient(colors: [HexColor(color).color, .clear], center: center, endRadiusFraction: size)
+    }
+}
+
+/// The main screen's wallpaper, read once, off the main thread, at a size that many previews draw quickly. Only Apple's
+/// wallpapers, in /System or /Library, are read: a picture in the home folder, iCloud or another app's data can show a
+/// privacy prompt. /System/Volumes/Data holds the home folder too.
+@MainActor @Observable private final class DesktopWallpaper {
+    static let shared = DesktopWallpaper()
+    private(set) var image: NSImage?
+
+    private init() {
+        guard let screen = NSScreen.screens.first,
+              let url = NSWorkspace.shared.desktopImageURL(for: screen)?.resolvingSymlinksInPath().standardizedFileURL,
+              (url.path.hasPrefix("/System/") && !url.path.hasPrefix("/System/Volumes/Data/")) || url.path.hasPrefix("/Library/")
+        else { return }
+        Task {
+            let thumbnail = await Task.detached(priority: .utility) { () -> CGImage? in
+                guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+                return CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                                                       kCGImageSourceThumbnailMaxPixelSize: 1200] as CFDictionary)
+            }.value
+            image = thumbnail.map { NSImage(cgImage: $0, size: .zero) }
+        }
     }
 }
 

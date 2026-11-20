@@ -341,14 +341,14 @@ func migrateStarterAppleLogo(_ url: URL, savedBy release: String? = AppVersion.r
 }
 
 /// Selects an installed package in place of a retired theme's frozen copy: the Store's package of a theme that moved to
-/// the Store, installed from its copy in `storeThemes`, or a copy of an older one's own files. A file this release or a
-/// newer one saved keeps its selections, since only a hand edit selects a frozen copy there.
-func migrateRetiredThemes(_ url: URL, themes: URL?, storeThemes: URL?, savedBy release: String? = AppVersion.release) throws {
+/// the Store, installed from its copy in `storeThemes`, or a copy of an older one's own files. A file pinned to this release
+/// or a newer one before the launch's migrations, `pinned`, keeps its selections, since only a hand edit selects a frozen
+/// copy there.
+func migrateRetiredThemes(_ url: URL, pinned: String?, themes: URL?, storeThemes: URL?,
+                          savedBy release: String? = AppVersion.release) throws {
+    if let release, let pinned, compareReleases(pinned, release) != .orderedAscending { return }
     let original = try Data(contentsOf: url)
     let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
-    if let release, let pinned = ConfigurationSchema.release(document["$schema"]), compareReleases(pinned, release) != .orderedAscending {
-        return
-    }
     let packages = WidgetPackageStore(directory: url.deletingLastPathComponent().appending(path: "packages"))
     /// The files that replace `id`'s frozen copy; nil when it isn't retired, or another package has their ID and version.
     func replacement(for id: String) throws -> (source: URL, manifest: WidgetPackageManifest, installed: Bool)? {
@@ -365,7 +365,9 @@ func migrateRetiredThemes(_ url: URL, themes: URL?, storeThemes: URL?, savedBy r
               let replacement = try replacement(for: id) else { return nil }
         if !replacement.installed {
             if legacyThemeIDs.contains(id) {
-                _ = try packages.install(replacement.source)
+                var record = PackageInstallRecord.local
+                record.origin = .retired
+                _ = try packages.install(replacement.source, record: record)
             } else {
                 _ = try packages.install(replacement.source, record: PackageInstallRecord(.store), requestedName: PackageSource.store.name)
             }
@@ -377,10 +379,19 @@ func migrateRetiredThemes(_ url: URL, themes: URL?, storeThemes: URL?, savedBy r
     var root = document
     var loader = ConfigurationLoader()
     loader.themesDirectory = themes
+    /// Whether the bar or a screen of `document` draws the fallback, which profiles name `built-in`: it selects no theme,
+    /// `built-in`, or a theme turned off.
+    func drawsTheFallback(_ document: [String: ConfigurationValue]) throws -> Bool {
+        let composed = try loader.compose(url, data: configurationData(document))
+        guard let theme = try composed["theme"]?.decoded(WidgetPackageSelection.self) else { return true }
+        let screens = try composed["screens"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]
+        let selections = try [theme] + screens.values.compactMap { try $0["theme"]?.decoded(WidgetPackageSelection.self) }
+        return selections.contains { !$0.enabled || $0.id == "built-in" }
+    }
     if let theme = root["theme"] {
         root["theme"] = try migrated(theme) ?? theme
     } else if try loader.compose(url)["theme"] == nil {
-        // No file of the configuration selects a theme, so it draws Built-in's look.
+        // No file of the configuration selects a theme, so it draws the fallback, which is Classic's look.
         root["theme"] = try migrated(.object(["id": .string("built-in")]))
     }
     if case var .object(screens) = root["screens"] {
@@ -390,16 +401,17 @@ func migrateRetiredThemes(_ url: URL, themes: URL?, storeThemes: URL?, savedBy r
         }
         root["screens"] = .object(screens)
     }
-    if case var .array(profiles) = root["profiles"], try replacement(for: "built-in") != nil {
+    if case var .array(profiles) = root["profiles"] {
+        let classicEditsTaken = profiles.contains { $0.value(at: "/name") == .string("Classic edits") }
         for case (let index, .object(var profile)) in profiles.enumerated() {
             guard case var .object(when) = profile["when"], when["theme"] == .string("built-in") else { continue }
             when["theme"] = .string("classic")
             profile["when"] = .object(when)
-            // The name Settings gave the profile that keeps Built-in's edits.
-            if profile["name"] == .string("Built-in edits") { profile["name"] = .string("Classic edits") }
+            // The name Settings gave the profile that keeps the edits of Classic, once called Built-in.
+            if profile["name"] == .string("Built-in edits") && !classicEditsTaken { profile["name"] = .string("Classic edits") }
             profiles[index] = .object(profile)
         }
-        root["profiles"] = .array(profiles)
+        if root["profiles"] != .array(profiles), try !drawsTheFallback(root) { root["profiles"] = .array(profiles) }
     }
     guard root != document else { return }
     try writeConfiguration(configurationData(root, editing: original, savedBy: release), to: url)

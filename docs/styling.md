@@ -82,7 +82,7 @@ An unmapped non-main mode activates only `mode`. Aliases start with a letter and
 
 ## Presentation roles and workspace defaults
 
-`role` is an explicit annotation on a widget or any layout/popup block. The allowed names are `time`, `primary`, `secondary`, `key`, `value`, `heading`, `button`, `meter`, `separator` and `slider`; unknown names are errors. Sliders have the default role described below; other blocks and widgets are not selected by type or ID. In particular, two `clock` widgets can use `time` and `secondary` independently. Built-in supplies an empty fallback for each role.
+`role` is an explicit annotation on a widget or any layout/popup block. The allowed names are `time`, `primary`, `secondary`, `key`, `value`, `heading`, `button`, `meter`, `separator` and `slider`; unknown names are errors. Sliders have the default role described below; other blocks and widgets are not selected by type or ID. In particular, two `clock` widgets can use `time` and `secondary` independently. The [fallback](themes.md) under every theme defines each role, empty.
 
 ```json
 {

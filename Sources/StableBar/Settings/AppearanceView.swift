@@ -213,7 +213,7 @@ struct AppearanceView: View {
     private var gallerySections: [(title: String, items: [ThemeItem])] {
         let installed = gallery.choices.onePerTheme(keeping: Set([gallery.selectedKey] + (screenTheme.map { [$0.key] } ?? [])))
             .filter { !$0.isBundled }
-        let isYours = { (choice: ThemeChoice) in [.installed, .local, .saved, .themeLink, .barLink].contains(gallery.source(of: choice)) }
+        let isYours = { (choice: ThemeChoice) in [.installed, .local, .saved, .themeLink, .barLink, .retired].contains(gallery.source(of: choice)) }
         let yours = installed.filter(isYours)
         let fromSources = installed.filter { !isYours($0) }.map(ThemeItem.installed)
             + gallery.storeThemes.map(ThemeItem.store)

@@ -2140,7 +2140,7 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
 @Test func aThemeThatMovedToTheStoreBecomesItsStorePackageForTheBarAndAScreen() throws {
     let fixture = try ThemeGalleryFixture(#"{"theme":{"id":"nord","enabled":false},"screens":{"laptop":{"theme":{"id":"leman"}}},"widgets":[]}"#)
     defer { fixture.close() }
-    try migrateRetiredThemes(fixture.url, themes: fixture.themes, storeThemes: fixture.storeThemes)
+    try migrateRetiredThemes(fixture.url, pinned: nil, themes: fixture.themes, storeThemes: fixture.storeThemes)
     let document = try fixture.document()
     #expect(document["theme"] == .object(["id": .string("nord"), "version": .string("1.1.0"), "enabled": .bool(false)]))
     #expect(document["screens"] == .object(["laptop": .object(["theme": .object(["id": .string("leman"), "version": .string("1.0.0")])])]))
@@ -2159,14 +2159,14 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
     let installed = try ThemeGalleryFixture(#"{"theme":{"id":"nord"},"widgets":[]}"#)
     defer { installed.close() }
     _ = try installed.packages.install(installed.storeThemes.appending(path: "nord"), record: PackageInstallRecord(.store))
-    try migrateRetiredThemes(installed.url, themes: installed.themes, storeThemes: installed.storeThemes)
+    try migrateRetiredThemes(installed.url, pinned: nil, themes: installed.themes, storeThemes: installed.storeThemes)
     #expect(try installed.document()["theme"] == .object(["id": .string("nord"), "version": .string("1.1.0")]))
 
     let saved = try ThemeGalleryFixture(#"{"theme":{"id":"leman"},"widgets":[]}"#)
     defer { saved.close() }
     let own = try saved.theme(#"{"bar":{"height":31}}"#, id: "leman", version: "1.0.0")
     let original = try Data(contentsOf: saved.url)
-    try migrateRetiredThemes(saved.url, themes: saved.themes, storeThemes: saved.storeThemes)
+    try migrateRetiredThemes(saved.url, pinned: nil, themes: saved.themes, storeThemes: saved.storeThemes)
     #expect(try Data(contentsOf: saved.url) == original)
     #expect(try saved.packages.manifest(at: own.directory).name == "Test theme")
 
@@ -2174,7 +2174,7 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
     defer { included.close() }
     try included.write(#"{"theme":{"id":"nord"}}"#, to: included.directory.appending(path: "look.json"))
     let before = try Data(contentsOf: included.url)
-    try migrateRetiredThemes(included.url, themes: included.themes, storeThemes: included.storeThemes)
+    try migrateRetiredThemes(included.url, pinned: nil, themes: included.themes, storeThemes: included.storeThemes)
     #expect(try Data(contentsOf: included.url) == before)
     #expect(try included.packages.list().isEmpty)
 }
@@ -2188,7 +2188,7 @@ func builtInBecomesClassicWithItsProfiles(theme: String) throws {
       {"name":"Night","when":{"appearance":"dark","theme":"built-in"},"configuration":{"bar":{"height":30}}}]}
     """#)
     defer { fixture.close() }
-    try migrateRetiredThemes(fixture.url, themes: fixture.themes, storeThemes: fixture.storeThemes)
+    try migrateRetiredThemes(fixture.url, pinned: nil, themes: fixture.themes, storeThemes: fixture.storeThemes)
     let document = try fixture.document()
     #expect(document["theme"] == .object(["id": .string("classic"), "version": .string("1.0.0")]))
     #expect(try document["profiles"]?.decoded([ConfigurationProfile].self).map(\.when?.theme) == ["classic", "classic"])
@@ -2200,15 +2200,65 @@ func builtInBecomesClassicWithItsProfiles(theme: String) throws {
     #expect(loader.activeProfiles == ["Classic edits"])
 }
 
+/// A bar or a screen whose theme is turned off still draws the fallback, so the profiles that name `built-in` stay.
+@Test(arguments: [
+    #""theme":{"id":"nord","version":"1.1.0","enabled":false},"#,
+    #""screens":{"laptop":{"theme":{"id":"nord","version":"1.1.0","enabled":false}}},"#
+])
+func profilesOfTheFallbackStayWhileATurnedOffThemeDrawsIt(theme: String) throws {
+    let fixture = try ThemeGalleryFixture(#"""
+    {\#(theme)"widgets":[],"profiles":[{"name":"Built-in edits","when":{"theme":"built-in"},"configuration":{"defaults":{"fontSize":15}}}]}
+    """#)
+    defer { fixture.close() }
+    _ = try fixture.packages.install(fixture.storeThemes.appending(path: "nord"), record: PackageInstallRecord(.store))
+    try migrateRetiredThemes(fixture.url, pinned: nil, themes: fixture.themes, storeThemes: fixture.storeThemes)
+    let profiles = try #require(fixture.document()["profiles"]).decoded([ConfigurationProfile].self)
+    #expect(profiles.map(\.name) == ["Built-in edits"])
+    #expect(profiles.map(\.when?.theme) == ["built-in"])
+}
+
+@Test func builtInEditsKeepTheirNameWhenAnotherProfileIsCalledClassicEdits() throws {
+    let fixture = try ThemeGalleryFixture(#"""
+    {"widgets":[],"profiles":[
+      {"name":"Built-in edits","when":{"theme":"built-in"},"configuration":{"defaults":{"fontSize":15}}},
+      {"name":"Classic edits","when":{"appearance":"dark"},"configuration":{"bar":{"height":30}}}]}
+    """#)
+    defer { fixture.close() }
+    try migrateRetiredThemes(fixture.url, pinned: nil, themes: fixture.themes, storeThemes: fixture.storeThemes)
+    let profiles = try #require(fixture.document()["profiles"]).decoded([ConfigurationProfile].self)
+    #expect(profiles.map(\.name) == ["Built-in edits", "Classic edits"])
+    #expect(profiles.map(\.when?.theme) == ["classic", nil])
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = fixture.themes
+    #expect(try loader.load(fixture.url).defaults.fontSize == 15)
+}
+
+/// At launch, a screen setup's own bar gets its retired theme's copy although another migration rewrote and pinned the
+/// file first, and although the shared file's migration failed.
+@Test @MainActor func launchMovesARetiredThemeInAFileAnotherMigrationPinnedAfterAFailedOne() throws {
+    let fixture = try ThemeGalleryFixture(#"{"includes":["missing.json"],"widgets":[]}"#)
+    defer { fixture.close() }
+    let ownBar = fixture.directory.appending(path: "setup-laptop.json")
+    try fixture.write(#"""
+    {"theme":{"id":"slate"},"widgets":[{"id":"apple","type":"text","text":"","icon":"apple.logo","onClick":"open -a 'System Settings'","position":"left"}]}
+    """#, to: ownBar)
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, release: "0.20.0")
+    defer { store.stop() }
+    store.start()
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: ownBar))
+    #expect(document["$schema"] == .string(ConfigurationSchema.url(release: "0.20.0")))
+    #expect(document["theme"] == .object(["id": .string("slate"), "version": .string("2.0.0")]))
+}
+
 /// A theme retired before retired themes moved to the Store becomes a copy of its frozen files, which the gallery shows
 /// under its own name.
 @Test func anOlderRetiredThemeBecomesACopyOfItsOwn() throws {
     let fixture = try ThemeGalleryFixture(#"{"theme":{"id":"slate"},"widgets":[]}"#)
     defer { fixture.close() }
-    try migrateRetiredThemes(fixture.url, themes: fixture.themes, storeThemes: fixture.storeThemes)
+    try migrateRetiredThemes(fixture.url, pinned: nil, themes: fixture.themes, storeThemes: fixture.storeThemes)
     #expect(try fixture.document()["theme"] == .object(["id": .string("slate"), "version": .string("2.0.0")]))
     #expect(try fixture.packages.sameContents(fixture.themes.appending(path: "slate"), fixture.packages.directory(id: "slate", version: "2.0.0")))
-    #expect(try fixture.packages.record(id: "slate") == .local)
+    #expect(try fixture.packages.record(id: "slate")?.origin == .retired)
     let choices = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes, selectedKey: "slate/2.0.0").choices
     #expect(choices.first { $0.key == "slate/2.0.0" }?.title == "Slate · 2.0.0")
     #expect(!choices.contains { $0.isLegacy })
@@ -2219,12 +2269,12 @@ func builtInBecomesClassicWithItsProfiles(theme: String) throws {
     let current = try ThemeGalleryFixture(#"{"$schema":"\#(ConfigurationSchema.url(release: "0.19.0"))","theme":{"id":"nord"},"widgets":[]}"#)
     defer { current.close() }
     let original = try Data(contentsOf: current.url)
-    try migrateRetiredThemes(current.url, themes: current.themes, storeThemes: current.storeThemes, savedBy: "0.19.0")
+    try migrateRetiredThemes(current.url, pinned: "0.19.0", themes: current.themes, storeThemes: current.storeThemes, savedBy: "0.19.0")
     #expect(try Data(contentsOf: current.url) == original)
 
     let earlier = try ThemeGalleryFixture(#"{"$schema":"\#(ConfigurationSchema.url(release: "0.18.0"))","theme":{"id":"nord"},"widgets":[]}"#)
     defer { earlier.close() }
-    try migrateRetiredThemes(earlier.url, themes: earlier.themes, storeThemes: earlier.storeThemes, savedBy: "0.19.0")
+    try migrateRetiredThemes(earlier.url, pinned: "0.18.0", themes: earlier.themes, storeThemes: earlier.storeThemes, savedBy: "0.19.0")
     #expect(try earlier.document()["theme"] == .object(["id": .string("nord"), "version": .string("1.1.0")]))
     #expect(try earlier.document()["$schema"] == .string(ConfigurationSchema.url(release: "0.19.0")))
 }
