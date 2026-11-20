@@ -157,8 +157,8 @@ enum SceneRenderer {
 
     /// Draws every scene file in `inputs`, a folder standing for its `*.json` files at any depth, to
     /// `<name>-<appearance>.png` in `output`, and writes `scenes.json` there: each scene's images, or
-    /// the error that stopped it. A scene's name is its file name; a second scene with the same name
-    /// is an error. Times are drawn in UTC.
+    /// the error that stopped it. A scene's name is its file name; a second scene with the same name,
+    /// ignoring case, is an error. Times are drawn in UTC.
     static func renderAll(_ inputs: [URL], to output: URL) async -> Report {
         DocsImages.useUTC()
         let work = FileManager.default.temporaryDirectory.appending(path: "stablebar-scenes-\(UUID().uuidString)")
@@ -206,7 +206,6 @@ enum SceneRenderer {
             while true {
                 while running < max(processes, 1), next < scenes.count {
                     let (name, file) = scenes[next]
-                    // Numbered, as names that differ only in case would share a folder on a disk that ignores case.
                     let folder = work.appending(path: "\(next)")
                     next += 1
                     running += 1
@@ -262,17 +261,20 @@ enum SceneRenderer {
         return entry
     }
 
-    /// `files` with their names, and an error entry for each file named like an earlier one.
+    /// `files` with their names, and an error entry for each file named like an earlier one, ignoring case: their images
+    /// would be one file on a disk that ignores case, as macOS's does by default.
     private static func named(_ files: [URL]) -> (scenes: [(name: String, file: URL)], duplicates: [String: ConfigurationValue]) {
         var scenes: [(name: String, file: URL)] = []
         var duplicates: [String: ConfigurationValue] = [:]
-        var names = Set<String>()
+        var names: [String: String] = [:]
         for file in files {
             let name = file.deletingPathExtension().lastPathComponent
-            if names.insert(name).inserted {
-                scenes.append((name, file))
+            if let other = names[name.lowercased()] {
+                let message = other == name ? "Another scene is also named \(name)." : "Another scene is named \(other), which differs only in case."
+                duplicates[file.path] = .object(["error": .string(message)])
             } else {
-                duplicates[file.path] = .object(["error": .string("Another scene is also named \(name).")])
+                names[name.lowercased()] = name
+                scenes.append((name, file))
             }
         }
         return (scenes, duplicates)

@@ -515,23 +515,6 @@ private let drawHere: @Sendable (URL, URL) async -> Int32 = { scene, folder in
     await SceneRenderer.renderAll([scene], to: folder).failures > 0 ? 1 : 0
 }
 
-/// Holds each task that arrives until `count` have.
-private actor Barrier {
-    private let count: Int
-    private var waiting: [CheckedContinuation<Void, Never>] = []
-
-    init(_ count: Int) { self.count = count }
-
-    func arrive() async {
-        guard waiting.count + 1 < count else {
-            waiting.forEach { $0.resume() }
-            waiting = []
-            return
-        }
-        await withCheckedContinuation { waiting.append($0) }
-    }
-}
-
 /// How many drawings run at once, and the most that did.
 private actor Running {
     private(set) var count = 0
@@ -594,9 +577,9 @@ private actor Running {
     #expect(FileManager.default.fileExists(atPath: output.appending(path: "draws-dark.png").path))
 }
 
-/// On a disk that ignores case, as macOS's does by default, two scenes whose names differ only in case still draw
-/// in folders of their own.
-@Test @MainActor func renderEachDrawsScenesNamedAlikeButForCase() async throws {
+/// Two scenes whose names differ only in case would write one image on a disk that ignores case, as macOS's does by
+/// default, so the second is an error, drawn either way.
+@Test(arguments: [false, true]) @MainActor func scenesNamedAlikeButForCaseAreRejected(eachInAProcess: Bool) async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
     let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
@@ -605,17 +588,16 @@ private actor Running {
     }
     try Data(darkBar.utf8).write(to: scenes.appending(path: "a/Clock.json"))
     try Data(darkBar.utf8).write(to: scenes.appending(path: "b/clock.json"))
-    // Both finish drawing before either is collected, as two processes at once can.
-    let bothDrawn = Barrier(2)
-    let summary = await SceneRenderer.renderEach([scenes], to: output, processes: 2) { scene, folder in
-        let status = await drawHere(scene, folder)
-        await bothDrawn.arrive()
-        return status
-    }
-    #expect(summary.failures == 0)
+    let summary = eachInAProcess ? await SceneRenderer.renderEach([scenes], to: output, processes: 2, draw: drawHere)
+        : await SceneRenderer.renderAll([scenes], to: output)
+    #expect(summary.failures == 1)
     let entries = try report(in: output)
     #expect(entries["Clock"] == .object(["images": .array([.string("Clock-dark.png")])]))
-    #expect(entries["clock"] == .object(["images": .array([.string("clock-dark.png")])]))
+    let errors = entries.values.compactMap { entry -> String? in
+        if case let .object(fields) = entry, case let .string(message)? = fields["error"] { message } else { nil }
+    }
+    #expect(errors == ["Another scene is named Clock, which differs only in case."])
+    #expect(entries.count == 2)
 }
 
 @Test @MainActor func renderAllFailsWhenItCannotWriteItsReport() async throws {
