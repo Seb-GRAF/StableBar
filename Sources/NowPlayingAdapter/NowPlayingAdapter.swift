@@ -96,10 +96,15 @@ private enum Artwork {
     static func file(_ data: Data?, track: [String]) -> String? {
         guard let data else { return current?.track == track ? current?.file.path : nil }
         let file = folder.appending(path: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined())
-        if file != current?.file {
-            if let current { try? FileManager.default.removeItem(at: current.file) }
-            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            try? data.write(to: file)
+        if file != current?.file || !FileManager.default.fileExists(atPath: file.path) {
+            if let current, current.file != file { try? FileManager.default.removeItem(at: current.file) }
+            do {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try data.write(to: file)
+            } catch {
+                current = nil
+                return nil
+            }
         }
         current = (track, file)
         return file.path

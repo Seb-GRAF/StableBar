@@ -634,9 +634,15 @@ extension Configuration {
     }
 
     /// The providers `widget` reads: the one it shows and, for a merge, its inputs.
+    /// The providers `widget` reads: its own, those its merge combines, and for the Sound details the input and what plays now.
     func providerNames(readBy widget: WidgetConfiguration) -> [String] {
-        widget.providerName.map { [$0] + providers[$0]!.providers } ?? []
+        guard let name = widget.providerName else { return [] }
+        let details = widget.details && providers[name]!.type == DataSourceType.audio.name
+            ? Self.soundDetailsProviders.filter { providers[$0]?.type == $0 } : []
+        return [name] + providers[name]!.providers + details
     }
+
+    static let soundDetailsProviders = [DataSourceType.microphone.name, DataSourceType.nowPlaying.name]
 }
 
 enum BarAppearance: String, Decodable, Sendable {
@@ -920,7 +926,7 @@ struct Configuration: Decodable, Sendable {
         }
         // The Sound details show the input device and what plays now too, which these providers read.
         if widgets.contains(where: { $0.enabled && $0.details && $0.providerName.flatMap { providers[$0]?.type } == DataSourceType.audio.name }) {
-            for name in [DataSourceType.microphone.name, DataSourceType.nowPlaying.name] where (providers[name]?.type ?? name) == name {
+            for name in Self.soundDetailsProviders where (providers[name]?.type ?? name) == name {
                 providers[name] = providers[name] ?? ProviderConfiguration(type: name)
                 active.insert(name)
             }

@@ -48,8 +48,8 @@ final class AppWatcher: NSObject {
         }
         let returning = behindPrompt != nil && front == behindPrompt
         behindPrompt = nil
-        guard !returning else { return }
         activeApp = front
+        guard !returning else { return }
         if let screen = NSScreen.main { activeDisplayID = BarDisplay(screen: screen).id }
         store.popup.close()
         store.configurationStore.refreshContext()
