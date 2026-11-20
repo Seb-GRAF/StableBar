@@ -66,10 +66,6 @@ struct PopupView: View {
                             guard store.barEditing.allowsWidgetActions else { return }
                             if popup.dismissOnAction { store.popup.close() }
                             store.widgetScripts.selectAudioDevice(id, input: input, widget: widget)
-                        }, sendNowPlaying: { command in
-                            guard store.barEditing.allowsWidgetActions else { return }
-                            if popup.dismissOnAction { store.popup.close() }
-                            store.widgetScripts.sendNowPlaying(command, widget: widget)
                         }, providerOutput: { store.widgetScripts.providers[$0]?.output }, openSubmenu: { [screenKind] element, row in
                             store.appMenu.openSubmenu(element, beside: row) { submenu in
                                 PopupView(popup: submenu, style: style, store: store, widget: widget).environment(\.screenKind, screenKind)

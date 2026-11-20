@@ -513,6 +513,7 @@ enum PopupAlignment: String, Decodable, Sendable {
 enum BlockAction: Sendable {
     case command(String)
     case set(NativeSetting)
+    case nowPlaying(NowPlaying.Command)
 }
 
 struct PopupControlOption: Decodable, Sendable {

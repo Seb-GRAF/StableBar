@@ -254,6 +254,8 @@ final class WidgetScripts {
                 case let .set(setting):
                     let value = event.environment["VALUE"]!
                     try await BlockingWork.run { try setting.set(value) }
+                case let .nowPlaying(command):
+                    try await NowPlaying.send(command)
                 }
                 if let script, scripts[widget.id] === script {
                     refresh(widget, event: ScriptEvent(sender: "action", environment: event.environment))
@@ -298,18 +300,6 @@ final class WidgetScripts {
             if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
         } catch {
             actionErrors[widget.id] = errorMessage(error)
-        }
-    }
-
-    /// Sends `command` to the playing app, for a click on `widget`.
-    func sendNowPlaying(_ command: NowPlaying.Command, widget: WidgetConfiguration) {
-        Task {
-            do {
-                try await NowPlaying.send(command)
-                if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
-            } catch {
-                actionErrors[widget.id] = errorMessage(error)
-            }
         }
     }
 
