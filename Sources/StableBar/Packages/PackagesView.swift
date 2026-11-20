@@ -126,7 +126,7 @@ struct PackagesView: View {
             }
         } message: { manifest in
             Text(manifest.kind == .theme
-                 ? "Its files will be deleted, and a bar that uses it switches to Clear without its settings. This cannot be undone."
+                 ? "Its files will be deleted. A bar that uses it switches to Clear, and a screen that uses it to the bar’s theme, without its settings. This cannot be undone."
                  : "Its files will be deleted and its widgets removed from the bar. Its settings and saved credentials are kept. This cannot be undone.")
         }
         .sheet(isPresented: $showingSources) { PackageSourcesView(library: library, link: $sourceLink) }

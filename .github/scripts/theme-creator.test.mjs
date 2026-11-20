@@ -1074,6 +1074,8 @@ test("workspace controls follow the indicator", () => {
   referenced.config.tokens.indicator = "underline";
   referenced.config.workspaceDefaults.indicator = "@token.indicator";
   assert.ok(idsFor(referenced).includes("workspaces.underlineWidth"));
+  const cells = idsFor(applyControl(state("notch"), "workspaces.indicator", "cells", "dark"));
+  assert.ok(cells.includes("workspaces.focusedFill") && cells.includes("workspaces.cornerRadius"));
 });
 
 test("workspace indicator and its controls write the app's paths", () => {

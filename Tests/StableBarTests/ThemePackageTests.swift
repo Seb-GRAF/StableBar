@@ -2216,6 +2216,22 @@ func profilesOfTheFallbackStayWhileATurnedOffThemeDrawsIt(theme: String) throws 
     let profiles = try #require(fixture.document()["profiles"]).decoded([ConfigurationProfile].self)
     #expect(profiles.map(\.name) == ["Built-in edits"])
     #expect(profiles.map(\.when?.theme) == ["built-in"])
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = fixture.themes
+    #expect(try loader.load(fixture.url).defaults.fontSize == 15)
+}
+
+/// A file the update doesn't rewrite, such as an included one, keeps its profiles on `built-in`, which apply to Classic.
+@Test func profilesOfAnIncludedFileOnBuiltInApplyToClassic() throws {
+    let fixture = try ThemeGalleryFixture(#"{"includes":["look.json"],"widgets":[]}"#)
+    defer { fixture.close() }
+    try fixture.write(#"{"profiles":[{"name":"Built-in edits","when":{"theme":"built-in"},"configuration":{"defaults":{"fontSize":15}}}]}"#,
+                      to: fixture.directory.appending(path: "look.json"))
+    try migrateRetiredThemes(fixture.url, pinned: nil, themes: fixture.themes, storeThemes: fixture.storeThemes)
+    #expect(try fixture.document()["theme"] == .object(["id": .string("classic"), "version": .string("1.0.0")]))
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = fixture.themes
+    #expect(try loader.load(fixture.url).defaults.fontSize == 15)
 }
 
 @Test func builtInEditsKeepTheirNameWhenAnotherProfileIsCalledClassicEdits() throws {

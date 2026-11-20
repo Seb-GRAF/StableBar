@@ -107,6 +107,18 @@ struct BarView: View {
     }
 }
 
+/// The line `bar.divider` draws between two units, once it has a background.
+struct BarDividerLine: View {
+    let divider: WidgetStyle
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: divider.cornerRadius ?? 0)
+            .fill(divider.background!.shapeStyle)
+            .frame(width: divider.width ?? 1, height: divider.height ?? 16)
+            .opacity(divider.opacity ?? 1)
+    }
+}
+
 struct PlacedUnits: View {
     let store: BarStore
     let display: BarDisplay
@@ -145,16 +157,15 @@ struct PlacedUnits: View {
             let visible = Set(units.filter { plan.placements[$0.id] != nil }.flatMap { $0.widgets.map(\.id) })
             ZStack(alignment: .topLeading) {
                 Color.clear.allowsHitTesting(false)
-                if let divider = config.bar.divider, let fill = divider.background {
+                if let divider = config.bar.divider, divider.background != nil {
                     let width = divider.width ?? 1
                     ForEach(plan.dividers.keys.sorted(), id: \.self) { id in
-                        RoundedRectangle(cornerRadius: divider.cornerRadius ?? 0)
-                            .fill(fill.shapeStyle)
-                            .frame(width: width, height: divider.height ?? 16)
-                            .opacity(divider.opacity ?? 1)
+                        BarDividerLine(divider: divider)
                             .frame(height: geometry.size.height / scale)
                             .offset(x: plan.dividers[id]! - width / 2)
                             .allowsHitTesting(false)
+                            // Above the units, whose tiles meet over it when `spacing` is 0.
+                            .zIndex(1)
                     }
                 }
                 ForEach(units) { unit in

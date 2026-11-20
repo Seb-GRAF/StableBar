@@ -64,7 +64,7 @@ struct PackageDetailView: View {
             Button("Uninstall version", role: .destructive) { Task { await library.uninstall(version) } }
         } message: { _ in
             Text(manifest.kind == .theme
-                 ? "This version’s files will be deleted, and a bar that uses it switches to Clear without its settings. Other versions stay installed. This cannot be undone."
+                 ? "This version’s files will be deleted. A bar that uses it switches to Clear, and a screen that uses it to the bar’s theme, without its settings. Other versions stay installed. This cannot be undone."
                  : "This version’s files will be deleted and its widgets removed from the bar if active. Other versions, settings and saved credentials are kept. This cannot be undone.")
         }
     }

@@ -2208,7 +2208,7 @@
         { "required": ["type"], "properties": { "type": { "not": { "type": "null" } } } },
         { "required": ["role"], "properties": { "role": { "not": { "type": "null" } } } },
         { "required": ["id"] },
-        { "required": ["others"], "properties": { "others": { "const": true } } }
+        { "required": ["others"], "properties": { "others": { "anyOf": [{ "const": true }, { "$ref": "#/definitions/reference" }] } } }
       ],
       "description": "Matches a widget that has every key listed. A selector naming id beats one that doesn't, then the one naming more keys, then the group with the lower ID. others comes last.",
       "properties": {

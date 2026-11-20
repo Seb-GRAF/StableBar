@@ -110,7 +110,7 @@ struct BarUnit: Identifiable {
         var units: [BarUnit] = []
         for widget in widgets {
             if let group = widget.group {
-                let id = groups[group]!.takesOthers ? "group:\(group):\(widget.position.rawValue)" : "group:\(group)"
+                let id = groups[group]!.takesOthers ? "group-\(widget.position.rawValue):\(group)" : "group:\(group)"
                 if let index = units.firstIndex(where: { $0.id == id }) {
                     units[index].widgets.append(widget)
                 } else {

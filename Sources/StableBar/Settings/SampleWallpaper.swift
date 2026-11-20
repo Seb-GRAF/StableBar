@@ -50,6 +50,7 @@ struct SampleWallpaper: View {
             let thumbnail = await Task.detached(priority: .utility) { () -> CGImage? in
                 guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
                 return CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                                                       kCGImageSourceCreateThumbnailWithTransform: true,
                                                                        kCGImageSourceThumbnailMaxPixelSize: 1200] as CFDictionary)
             }.value
             image = thumbnail.map { NSImage(cgImage: $0, size: .zero) }
@@ -69,7 +70,8 @@ extension NSWorkspace {
 /// volumes can show a privacy prompt. /System/Volumes/Data holds the home folder too.
 func wallpaperReadsWithoutPrompt(_ url: URL, home: URL) -> Bool {
     let path = url.resolvingSymlinksInPath().standardizedFileURL.path
-    let pictures = home.appending(path: "Pictures").resolvingSymlinksInPath().standardizedFileURL.path + "/"
+    // A Pictures folder that links elsewhere, such as to Desktop, leads where macOS can ask.
+    let pictures = home.resolvingSymlinksInPath().appending(path: "Pictures").standardizedFileURL.path + "/"
     guard (path.hasPrefix("/System/") && !path.hasPrefix("/System/Volumes/Data/")) || path.hasPrefix("/Library/") || path.hasPrefix(pictures)
     else { return false }
     return !path.split(separator: "/").contains { $0.hasSuffix(".photoslibrary") }

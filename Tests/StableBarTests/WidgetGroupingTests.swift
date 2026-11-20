@@ -105,9 +105,22 @@ private let row = #"""
     """#)
     defer { bar.close() }
     let laptop = try #require(bar.store.configuration?.onScreen(.laptop))
-    #expect(BarUnit.make(widgets: laptop.widgets, groups: laptop.groups).map(\.id) == ["group:clock", "group:others:left", "widget:date"])
+    #expect(BarUnit.make(widgets: laptop.widgets, groups: laptop.groups).map(\.id) == ["group:clock", "group-left:others", "widget:date"])
     #expect(bar.grouping.choices(for: "date", among: laptop.widgets, groups: laptop.groups) == [])
     #expect(bar.grouping.ungroupBlocker("others") != nil)
+}
+
+/// A screen without a layout of its own shows the shared one, and a move there takes the pill its own theme draws.
+@MainActor @Test func aMoveOnAScreenWithItsOwnThemeTakesThatThemesPill() throws {
+    let bar = try GroupingFixture(#"""
+    {"theme":{"id":"clear"},"screens":{"laptop":{"theme":{"id":"dot"}}},"widgets":[
+      {"id":"note","type":"text","text":"Note","position":"left"},
+      {"id":"memo","type":"text","text":"Memo","position":"left"}
+    ]}
+    """#)
+    defer { bar.close() }
+    try bar.apply(WidgetSetup(store: bar.store).editsMoving("note", to: .right, on: .laptop))
+    #expect(bar.widgets.filter { $0.position == .right }.map(\.id) == ["note", "memo"])
 }
 
 @MainActor @Test func aWidgetJoinsTheOthersPillBesideItWhereItIs() throws {

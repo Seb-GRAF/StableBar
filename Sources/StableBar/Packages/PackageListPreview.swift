@@ -78,7 +78,8 @@ struct WidgetSampleContent: View {
         case "inputSource": ScriptOutput(text: "FR", icon: "keyboard")
         case "system": ScriptOutput(text: "24%", icon: "cpu", value: 0.24, fields: ["memory": "54"], values: ["cpu": 0.24, "memory": 0.54])
         case "network": ScriptOutput(text: "↓ 1.2 MB/s  ↑ 80 KB/s", icon: "network")
-        case "calendar": ScriptOutput(text: "Team meeting", icon: "calendar", fields: ["title": "Team meeting", "phase": "soon", "minutes": "9"])
+        case "calendar": ScriptOutput(text: "Team meeting", icon: "calendar", fields: ["title": "Team meeting", "phase": "soon", "minutes": "9",
+                                                                                                 "joinCommand": "open 'https://meet.google.com'"])
         default: nil
         }
     }

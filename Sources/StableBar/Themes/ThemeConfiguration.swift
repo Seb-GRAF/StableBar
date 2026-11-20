@@ -150,7 +150,8 @@ struct ProfileConditions: Codable, Equatable, Sendable {
             (.microphone, microphone == nil || microphone == context.microphone),
             (.app, app == nil || appInFront),
             (.apps, apps == nil || appInFront),
-            (.theme, theme == nil || theme == context.theme),
+            // Classic is Built-in's files, so profiles that included files keep on `built-in` still apply to it.
+            (.theme, theme == nil || theme == context.theme || theme == "built-in" && context.theme == "classic"),
         ]
         return met.filter { !$0.1 }.map(\.0)
     }

@@ -234,11 +234,11 @@ struct ThemeSampleBar: View {
         }
         let units = BarUnit.make(widgets: WidgetGroupConfiguration.joining(ungrouped, groups: look.groups), groups: look.groups)
         HStack(spacing: look.bar.spacing) {
-            ForEach(units.filter { $0.position == .left }, content: unit)
+            run(units.filter { $0.position == .left })
             Spacer(minLength: 0)
-            ForEach(units.filter { [.notchLeft, .center, .notchRight].contains($0.position) }, content: unit)
+            run(units.filter { [.notchLeft, .center, .notchRight].contains($0.position) })
             Spacer(minLength: 0)
-            ForEach(units.filter { $0.position == .right }, content: unit)
+            run(units.filter { $0.position == .right })
         }
         .lineLimit(1)
         .padding(.horizontal, look.bar.inset)
@@ -254,8 +254,8 @@ struct ThemeSampleBar: View {
         .allowsHitTesting(false)
     }
 
-    func workspaces(active: Int) -> some View {
-        let style = look.defaults.resolved(for: StyleStates())
+    func workspaces(active: Int, group: WidgetStyle) -> some View {
+        let style = resolveStyle([look.defaults, group])
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let focused = workspace?.cellStyle(.focused) ?? WorkspaceCellStyle()
         let underline = focused.underline
@@ -319,6 +319,17 @@ struct ThemeSampleBar: View {
             }
     }
 
+    /// Units that sit side by side, with a divider in the gap between two of them, as on the bar.
+    private func run(_ units: [BarUnit]) -> some View {
+        ForEach(units.indices, id: \.self) { index in
+            unit(units[index]).overlay(alignment: .leading) {
+                if let divider = look.bar.divider, divider.background != nil, index > 0, !units[index].isSpacer, !units[index - 1].isSpacer {
+                    BarDividerLine(divider: divider).offset(x: -(look.bar.spacing + (divider.width ?? 1)) / 2)
+                }
+            }
+        }
+    }
+
     private func unit(_ unit: BarUnit) -> some View {
         BarUnitSurface(style: unit.style ?? WidgetStyle(), defaults: look.defaults, spacing: look.bar.spacing) {
             ForEach(unit.widgets) { sample($0, group: look.groupStyle(of: $0)) }
@@ -328,7 +339,7 @@ struct ThemeSampleBar: View {
 
     @ViewBuilder private func sample(_ widget: WidgetConfiguration, group: WidgetStyle = WidgetStyle()) -> some View {
         if widget.content == .workspaces {
-            workspaces(active: 1)
+            workspaces(active: 1, group: group)
         } else {
             let style = resolveStyle([look.defaults, look.roleStyle(widget.role), group, widget.barStyle])
             WidgetSampleContent(widget: widget, inheritedStyle: style.inheritedByBlocks, roles: look.roles)

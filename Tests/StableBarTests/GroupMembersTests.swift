@@ -132,8 +132,10 @@ private func groupsByWidget(_ json: String) throws -> [String: String] {
     ]}
     """#)
     let units = BarUnit.make(widgets: config.widgets, groups: config.groups)
-    #expect(units.map(\.id) == ["group:more:left", "widget:gap", "group:more:center", "group:more:right"])
+    #expect(units.map(\.id) == ["group-left:more", "widget:gap", "group-center:more", "group-right:more"])
     #expect(units.map { $0.widgets.map(\.id) } == [["note", "task"], ["gap"], ["song"], ["far"]])
+    let moved = try WidgetPlacement.arrangement(moving: "note", by: 1, widgets: config.widgets)
+    #expect(moved.filter { $0.position == .left }.map(\.id) == ["gap", "note", "task"])
 }
 
 @Test func aScreensOwnLayoutDecidesWhichWidgetsJoin() throws {

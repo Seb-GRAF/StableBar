@@ -152,3 +152,13 @@ final class ThemeCardTests: XCTestCase {
         #expect(wallpaperReadsWithoutPrompt(URL(filePath: path), home: home) == readable, "\(path)")
     }
 }
+
+@Test func wallpaperIsNotReadThroughPicturesLinkedToTheDesktop() throws {
+    let home = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    let photo = home.appending(path: "Desktop/photo.jpg")
+    try FileManager.default.createDirectory(at: photo.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data().write(to: photo)
+    try FileManager.default.createSymbolicLink(at: home.appending(path: "Pictures"), withDestinationURL: photo.deletingLastPathComponent())
+    #expect(!wallpaperReadsWithoutPrompt(home.appending(path: "Pictures/photo.jpg"), home: home))
+}

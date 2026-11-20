@@ -181,7 +181,8 @@ final class WidgetSetup {
     }
 
     func editsMoving(_ id: String, to position: WidgetPosition, before anchor: String? = nil, on kind: ScreenKind? = nil) throws -> [ConfigurationEdit] {
-        let widgets = store.configuration?.widgets ?? []
+        // Without its own layout, a screen shows the shared one in the groups of its own theme, which move together.
+        let widgets = (kind.flatMap { store.configuration?.onScreen($0) } ?? store.configuration)?.widgets ?? []
         if let kind, let configuration = store.configuration, hasOwnLayout(kind, in: configuration) {
             return [layoutEdit(try WidgetPlacement.arrangement(moving: id, to: position, before: anchor, widgets: configuration.onScreen(kind).widgets), shownOn: kind, on: kind)]
         }
@@ -198,7 +199,7 @@ final class WidgetSetup {
     }
 
     func editsMoving(_ id: String, by offset: Int, on kind: ScreenKind? = nil, listed: (WidgetConfiguration) -> Bool = { _ in true }) throws -> [ConfigurationEdit] {
-        let widgets = store.configuration?.widgets ?? []
+        let widgets = (kind.flatMap { store.configuration?.onScreen($0) } ?? store.configuration)?.widgets ?? []
         if let kind, let configuration = store.configuration, hasOwnLayout(kind, in: configuration) {
             return [layoutEdit(try WidgetPlacement.arrangement(moving: id, by: offset, widgets: configuration.onScreen(kind).widgets, listed: listed), shownOn: kind, on: kind)]
         }

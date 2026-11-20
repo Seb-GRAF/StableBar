@@ -233,7 +233,7 @@ export function resolveTheme(base, config, appearance) {
 }
 
 const docs = "https://github.com/stablebox/StableBar/blob/main/docs/";
-const indicatorIs = indicator => state => (state.config.workspaceDefaults?.indicator ?? "background") === indicator;
+const indicatorIs = (...indicators) => state => indicators.includes(state.config.workspaceDefaults?.indicator ?? "background");
 
 function control(id, label, kind, paths, help, guide, appliesWhen,
   { range = [0, 40], step = 1, unit = "pt", slider = false } = {}) {
@@ -322,9 +322,9 @@ export const CONTROLS = [
   control("workspaces.focusedForeground", "Focused text", "color", ["workspaceDefaults.style.states.focused.foreground"],
     "Set the text color of the focused workspace.", "widgets.md#workspace-appearance"),
   control("workspaces.focusedFill", "Focused fill", "color", ["workspaceDefaults.style.states.focused.background"],
-    "Set the focused workspace's background.", "widgets.md#workspace-appearance", indicatorIs("background")),
+    "Set the focused workspace's background.", "widgets.md#workspace-appearance", indicatorIs("background", "cells")),
   control("workspaces.cornerRadius", "Indicator corners", "number", ["workspaceDefaults.style.cornerRadius"],
-    "Round the background indicator's corners.", "widgets.md#workspace-appearance", indicatorIs("background"),
+    "Round the indicator's corners.", "widgets.md#workspace-appearance", indicatorIs("background", "cells"),
     { range: [0, 1000] }),
   ...[
     ["Width", "width", "Underline width"], ["Height", "height", "Underline height"],
