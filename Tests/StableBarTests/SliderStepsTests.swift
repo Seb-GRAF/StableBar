@@ -2,16 +2,19 @@ import Testing
 @testable import StableBar
 
 @Test func aSliderKeepsItsStepTicksOnlyWhereTheyStayApart() {
-    // Settings' 110-point number field sliders.
+    // Settings' 110-point number field sliders, whose ticks would all sit closer than 6 points.
     #expect(!SliderSteps(range: 16...100, step: 1).ticksFit(width: 110))
     #expect(!SliderSteps(range: 0...40, step: 1).ticksFit(width: 110))
-    #expect(SliderSteps(range: 110...200, step: 5).ticksFit(width: 110))
+    #expect(!SliderSteps(range: 0...30, step: 1).ticksFit(width: 110))
+    #expect(!SliderSteps(range: 0...20, step: 1).ticksFit(width: 110))
+    #expect(!SliderSteps(range: 110...200, step: 5).ticksFit(width: 110))
+    #expect(SliderSteps(range: 0...15, step: 1).ticksFit(width: 110))
     // A popup slider's default step, and a coarser one.
     #expect(!SliderSteps(range: 0...1, step: 0.01).ticksFit(width: 260))
     #expect(SliderSteps(range: 0...1, step: 0.1).ticksFit(width: 260))
     // Two stops still need room between their ticks; a step past the range has none to draw.
-    #expect(!SliderSteps(range: 0...1, step: 1).ticksFit(width: 22))
-    #expect(SliderSteps(range: 0...1, step: 1).ticksFit(width: 24))
+    #expect(!SliderSteps(range: 0...1, step: 1).ticksFit(width: 25))
+    #expect(SliderSteps(range: 0...1, step: 1).ticksFit(width: 26))
     #expect(SliderSteps(range: 0...1, step: 2).ticksFit(width: 10))
 }
 

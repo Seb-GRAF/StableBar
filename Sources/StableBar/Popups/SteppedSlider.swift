@@ -4,16 +4,18 @@ import SwiftUI
 struct SliderSteps: Equatable {
     /// About as wide as the native knob, whose center stops half of it short of each end of the track.
     static let knobWidth = 20.0
+    /// macOS's ticks closer than this read as a dotted line rather than as steps.
+    static let minimumTickSpacing = 6.0
 
     let range: ClosedRange<Double>
     let step: Double
 
-    /// Whether a tick under every step stays at least `EndStopSliderTrack.minimumTickSpacing` from the next on a
-    /// slider `width` points wide.
+    /// Whether a tick under every step stays at least `minimumTickSpacing` from the next on a slider `width` points
+    /// wide.
     func ticksFit(width: Double) -> Bool {
         let gaps = ((range.upperBound - range.lowerBound) / step + 1e-9).rounded(.down)
         guard gaps >= 1 else { return true }
-        return (width - Self.knobWidth) / gaps >= EndStopSliderTrack.minimumTickSpacing
+        return (width - Self.knobWidth) / gaps >= Self.minimumTickSpacing
     }
 
     /// The step nearest `value`, within the range.
