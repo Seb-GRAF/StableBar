@@ -35,6 +35,8 @@ struct BlockContext {
     /// Makes a `selectOutputDeviceField` block's audio device the default output, or with `true` a
     /// `selectInputDeviceField` block's the default input.
     var selectAudioDevice: (String, Bool) -> Void = { _, _ in }
+    /// Sends a `nowPlayingCommand` block's command to the playing app.
+    var sendNowPlaying: (NowPlaying.Command) -> Void = { _ in }
     /// The latest output of another running provider, by its name, such as the microphone's for the Sound details.
     var providerOutput: (String) -> ScriptOutput? = { _ in nil }
     /// Opens the submenu of an app menu block's item beside the item's row, or without an item, closes the one open
@@ -223,6 +225,12 @@ struct PopupBlockView: View {
                     .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
             } else if let id = block.selectInputDeviceField.flatMap({ fields[$0] }) {
                 Button { context.selectAudioDevice(id, true) } label: {
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
+                }
+                    .buttonStyle(.plain)
+                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
+            } else if let command = block.nowPlayingCommand {
+                Button { context.sendNowPlaying(command) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)

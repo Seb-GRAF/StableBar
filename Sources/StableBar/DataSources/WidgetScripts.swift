@@ -301,6 +301,18 @@ final class WidgetScripts {
         }
     }
 
+    /// Sends `command` to the playing app, for a click on `widget`.
+    func sendNowPlaying(_ command: NowPlaying.Command, widget: WidgetConfiguration) {
+        Task {
+            do {
+                try await NowPlaying.send(command)
+                if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
+            } catch {
+                actionErrors[widget.id] = errorMessage(error)
+            }
+        }
+    }
+
     func stop() {
         for script in scripts.values { script.stop() }
         for provider in providers.values { provider.stop() }

@@ -1145,6 +1145,26 @@
         "selectInputDeviceField": {
           "$ref": "#/definitions/string"
         },
+        "nowPlayingCommand": {
+          "anyOf": [
+            {
+              "enum": [
+                "togglePlayPause",
+                "nextTrack",
+                "previousTrack",
+                "skipBackward",
+                "skipForward"
+              ]
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What a click sends to the app that plays now, without a command: play or pause, the next or previous track, or 15 seconds back or forward."
+        },
         "openMenuBarItem": {
           "$ref": "#/definitions/menuBarItem"
         },

@@ -531,6 +531,7 @@ struct WidgetBlocks: View {
                                                  pressMenuBarItem: { if store.barEditing.allowsWidgetActions { store.appMenu.press($0) } },
                                                  selectInputSource: { if store.barEditing.allowsWidgetActions { store.widgetScripts.selectInputSource($0, widget: widget) } },
                                                  selectAudioDevice: { if store.barEditing.allowsWidgetActions { store.widgetScripts.selectAudioDevice($0, input: $1, widget: widget) } },
+                                                 sendNowPlaying: { if store.barEditing.allowsWidgetActions { store.widgetScripts.sendNowPlaying($0, widget: widget) } },
                                                  states: style.states, tracksHover: style.tracksHover, appIcon: appIcon, motion: motion,
                                                  runAction: runAction))
         }
