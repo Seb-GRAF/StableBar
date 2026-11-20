@@ -43,10 +43,11 @@ struct WidgetSample: View {
     }
 }
 
-/// A widget drawn with sample data, its blocks inheriting `inheritedStyle` as on the bar.
+/// A widget drawn with sample data, its blocks inheriting `inheritedStyle` and styled by `roles` as on the bar.
 struct WidgetSampleContent: View {
     let widget: WidgetConfiguration
     let inheritedStyle: WidgetStyle
+    var roles: [String: WidgetStyle] = [:]
 
     var body: some View {
         Group {
@@ -64,7 +65,8 @@ struct WidgetSampleContent: View {
                 let layout = (sample == nil ? nil : widget.layout) ?? widget.defaultLayout(label, output: output, appIcon: false)!
                 PopupBlockView(block: layout, inheritedStyle: inheritedStyle, fields: label.fields,
                                context: BlockContext(samples: (0..<60).map { [0.2, 0.35, 0.24, 0.5, 0.38, 0.24][$0 % 6] },
-                                                     values: output.values ?? [:], fillsWidth: false, open: { _ in }, runAction: { _, _ in }))
+                                                     values: output.values ?? [:], roles: roles, fillsWidth: false, open: { _ in },
+                                                     runAction: { _, _ in }))
             }
         }
     }

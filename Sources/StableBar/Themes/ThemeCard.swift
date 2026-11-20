@@ -18,6 +18,7 @@ struct ThemeCard: View {
     let select: () -> Void
     @State private var hovering = false
     @State private var confirmingDelete = false
+    @State private var barWidth: CGFloat = 0
 
     var body: some View {
         Group {
@@ -106,10 +107,17 @@ struct ThemeCard: View {
         Group {
             if let look {
                 GeometryReader { proxy in
+                    let scale = min(0.5, proxy.size.width / barWidth)
                     ThemeSampleBar(look: look)
-                        .frame(width: proxy.size.width * 2)
-                        .scaleEffect(0.5)
+                        .frame(width: proxy.size.width / scale)
+                        .scaleEffect(scale)
                         .frame(width: proxy.size.width, height: proxy.size.height)
+                        .background {
+                            ThemeSampleBar(look: look)
+                                .fixedSize()
+                                .hidden()
+                                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
+                        }
                 }
             } else {
                 Text(isStore && error == nil ? "Loading preview…" : "Preview unavailable")
@@ -127,8 +135,28 @@ struct ThemeCard: View {
 
 struct ThemeSampleBar: View {
     let look: Configuration
-    /// The widgets to draw with sample data, in their places, instead of workspaces, Finder, a battery and the time.
+    /// The widgets to draw with sample data, in their places, instead of `sampleWidgets`.
     let widgets: [WidgetConfiguration]?
+    /// Built-in widgets that need no permission, which join a theme's groups as on the bar.
+    static let sampleWidgets = try! JSONDecoder().decode([WidgetConfiguration].self, from: Data(#"""
+        [
+          { "id": "workspaces", "type": "workspaces", "position": "left" },
+          { "id": "app", "type": "activeApp", "position": "left" },
+          {
+            "id": "system", "type": "system", "position": "right",
+            "layout": {
+              "type": "row", "style": { "spacing": 6 },
+              "children": [
+                { "type": "text", "text": "CPU", "role": "key", "style": { "fontWeight": "medium" } },
+                { "type": "field", "field": "text" },
+                { "type": "progress", "source": "cpu", "height": 4, "role": "meter", "style": { "width": 32 } }
+              ]
+            }
+          },
+          { "id": "battery", "type": "battery", "position": "right" },
+          { "id": "clock", "type": "clock", "position": "right", "format": "EEE d MMM  HH:mm" }
+        ]
+        """#.utf8))
 
     var barStyle: WidgetStyle { look.bar.style.resolved(for: StyleStates()) }
     var stripHeight: Double { max(0, look.bar.height - 2 * look.bar.margin) }
@@ -143,17 +171,16 @@ struct ThemeSampleBar: View {
     var body: some View {
         HStack(spacing: look.bar.spacing) {
             if let widgets {
-                ForEach(widgets.filter { $0.position == .left }, content: sample)
+                ForEach(widgets.filter { $0.position == .left }) { sample($0) }
                 Spacer(minLength: 0)
-                ForEach(widgets.filter { [.notchLeft, .center, .notchRight].contains($0.position) }, content: sample)
+                ForEach(widgets.filter { [.notchLeft, .center, .notchRight].contains($0.position) }) { sample($0) }
                 Spacer(minLength: 0)
-                ForEach(widgets.filter { $0.position == .right }, content: sample)
+                ForEach(widgets.filter { $0.position == .right }) { sample($0) }
             } else {
-                workspaces(active: 1)
-                tile(role: .primary) { Text("Finder") }
+                let units = BarUnit.make(widgets: WidgetGroupConfiguration.joining(Self.sampleWidgets, groups: look.groups), groups: look.groups)
+                ForEach(units.filter { $0.position == .left }, content: unit)
                 Spacer(minLength: 0)
-                tile(role: .value) { battery }
-                tile(role: .time) { Text("9:41") }
+                ForEach(units.filter { $0.position == .right }, content: unit)
             }
         }
         .lineLimit(1)
@@ -235,12 +262,19 @@ struct ThemeSampleBar: View {
             }
     }
 
-    @ViewBuilder private func sample(_ widget: WidgetConfiguration) -> some View {
+    private func unit(_ unit: BarUnit) -> some View {
+        BarUnitSurface(style: unit.style ?? WidgetStyle(), defaults: look.defaults, spacing: look.bar.spacing) {
+            ForEach(unit.widgets) { sample($0, group: look.groupStyle(of: $0)) }
+        }
+        .fixedSize()
+    }
+
+    @ViewBuilder private func sample(_ widget: WidgetConfiguration, group: WidgetStyle = WidgetStyle()) -> some View {
         if widget.content == .workspaces {
             workspaces(active: 1)
         } else {
-            let style = resolveStyle([look.defaults, look.roleStyle(widget.role), widget.barStyle])
-            WidgetSampleContent(widget: widget, inheritedStyle: style.inheritedByBlocks)
+            let style = resolveStyle([look.defaults, look.roleStyle(widget.role), group, widget.barStyle])
+            WidgetSampleContent(widget: widget, inheritedStyle: style.inheritedByBlocks, roles: look.roles)
                 .modifier(ThemeSampleTile(style: style))
                 .layoutPriority(1)
         }

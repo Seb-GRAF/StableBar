@@ -1,4 +1,5 @@
 import SwiftUI
+import Testing
 import XCTest
 @testable import StableBar
 
@@ -55,10 +56,10 @@ final class ThemeCardTests: XCTestCase {
     @MainActor func testSampleBarFillsTheFocusedWorkspaceOnlyForTheBackgroundIndicator() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
-        // Only the accent is magenta, so magenta pixels can only come from the focused workspace's fill.
+        // Only the accent is magenta, and the meter has its own, so magenta pixels can only come from the focused workspace's fill.
         for (indicator, fills) in [(#""indicator":"none","#, false), (#""indicator":"background","#, true), ("", true)] {
             let choice = try fixture.theme(##"""
-            {"defaults":{"foreground":"#ffffff","accent":"#ff00ff","accentText":"#00ff00"},
+            {"defaults":{"foreground":"#ffffff","accent":"#ff00ff","accentText":"#00ff00"},"roles":{"meter":{"accent":"#00ff00"}},
              "workspaceDefaults":{\##(indicator)"style":{"states":{"focused":{"foreground":"#00ff00"}}}}}
             """##, install: false)
             let look = try ThemePreview(choice: choice, themesDirectory: fixture.themes).configuration(for: .dark)
@@ -95,6 +96,34 @@ final class ThemeCardTests: XCTestCase {
                 XCTAssertGreaterThan(image.height, 76)
                 XCTAssertLessThan(image.height, 130)
             }
+        }
+    }
+}
+
+@MainActor @Test func sampleBarDrawsTheThemeGroupsAroundTheirMembers() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    // Only the group is magenta, so magenta pixels can only come from sample widgets joining it.
+    for members in [#"[{"type":"clock"}]"#, #"[{"others":true}]"#, #"[{"type":"audio"}]"#] {
+        let choice = try fixture.theme(##"""
+        {"groups":{"time":{"style":{"background":"#ff00ff","paddingHorizontal":6},"members":\##(members)}}}
+        """##, install: false)
+        let look = try ThemePreview(choice: choice, themesDirectory: fixture.themes).configuration(for: .dark)
+        let renderer = ImageRenderer(content: ThemeSampleBar(look: look).frame(width: 700))
+        let bitmap = NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+        var groupPixels = 0
+        for y in 0..<bitmap.pixelsHigh {
+            for x in 0..<bitmap.pixelsWide {
+                if let color = bitmap.colorAt(x: x, y: y), color.alphaComponent > 0.8,
+                   color.redComponent > 0.8 && color.blueComponent > 0.8 && color.greenComponent < 0.2 {
+                    groupPixels += 1
+                }
+            }
+        }
+        if members.contains("audio") {
+            #expect(groupPixels == 0, "No sample widget joins a group of Sound widgets")
+        } else {
+            #expect(groupPixels > 100, "The sample widgets join a group whose members are \(members)")
         }
     }
 }
