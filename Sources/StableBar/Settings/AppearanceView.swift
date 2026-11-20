@@ -191,7 +191,9 @@ struct AppearanceView: View {
             ForEach(sections, id: \.title) { section in
                 Text(section.title).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(.secondary)
                     .padding(.top, 8).padding(.horizontal, 2)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                let columns = section.title == "Included" ? Array(repeating: GridItem(.flexible(), spacing: 10), count: 2)
+                    : [GridItem(.adaptive(minimum: 150), spacing: 10)]
+                LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(section.items) { card($0, appearance: appearance) }
                 }
             }
@@ -229,7 +231,7 @@ struct AppearanceView: View {
             let selected = screenTheme.map { $0.enabled ? $0.key : "built-in" } ?? gallery.selectedKey
             return ThemeCard(title: choice.title, look: look, description: choice.manifest.description, appearance: appearance,
                              isSelected: selected == choice.key,
-                             isEdited: gallery.editedThemes.contains(choice.manifest.id),
+                             isEdited: gallery.editedThemes.contains(choice.manifest.id), showsBarEndsAndPopup: choice.isBundled,
                              progress: gallery.progress[item.id], error: gallery.error(for: item.id), source: gallery.source(of: choice),
                              showInFinder: choice.isBundled ? nil : { NSWorkspace.shared.activateFileViewerSelecting([choice.directory]) },
                              delete: choice.isBundled ? nil : { Task { await gallery.delete(choice) } }, inUse: themesInUse.contains(choice.key)) {

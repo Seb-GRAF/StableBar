@@ -7,6 +7,9 @@ struct ThemeCard: View {
     var appearance: BarAppearance = .light
     var isSelected = false
     var isEdited = false
+    /// Draws the two ends of the sample bar side by side at real size, without its middle, and the battery's popup under
+    /// them, instead of the whole bar at half.
+    var showsBarEndsAndPopup = false
     var progress: String?
     var error: String?
     var isStore = false
@@ -114,7 +117,22 @@ struct ThemeCard: View {
 
     private var preview: some View {
         Group {
-            if let look {
+            if let look, showsBarEndsAndPopup {
+                GeometryReader { proxy in
+                    // The clock at the right end is wider than the workspaces at the left.
+                    HStack(spacing: 10) {
+                        end(of: look, alignment: .leading).frame(width: (proxy.size.width - 10) * 0.4)
+                        end(of: look, alignment: .trailing)
+                    }
+                    .frame(height: 60)
+                }
+                .overlay(alignment: .topTrailing) {
+                    popup(of: look)
+                        .scaleEffect(0.6, anchor: .topTrailing)
+                        .padding(.top, 30 + ThemeSampleBar(look: look).stripHeight / 2 + look.bar.popupOffset)
+                        .padding(.trailing, look.bar.margin + look.bar.inset)
+                }
+            } else if let look {
                 GeometryReader { proxy in
                     let scale = min(0.5, proxy.size.width / barWidth)
                     ThemeSampleBar(look: look)
@@ -134,11 +152,41 @@ struct ThemeCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(height: 46)
+        .frame(height: showsBarEndsAndPopup ? 190 : 46)
         .background(SampleWallpaper())
         .clipShape(RoundedRectangle(cornerRadius: 7))
         .environment(\.colorScheme, appearance.colorScheme)
         .accessibilityHidden(true)
+    }
+
+    /// The battery's popup in `look`, with sample data.
+    private func popup(of look: Configuration) -> some View {
+        let popup = EssentialsPopup.battery.popup(timeZone: nil)
+        let style = popup.baseStyle(widget: ThemeSampleBar.sampleWidgets.first { $0.id == "battery" }!,
+                                    defaults: look.popupDefaults.popupStyle(over: look.defaults))
+        let resolved = style.resolved(for: StyleStates())
+        let appearance = WidgetAppearance(resolved, defaults: WidgetStyle(spacing: PopupConfiguration.blockSpacing))
+        return PopupBlockView(block: popup.layout, inheritedStyle: style, fields: ["percent": "82", "state": "battery", "timeRemaining": "312"],
+                              context: BlockContext(values: ["percent": 0.82], roles: look.roles, open: { _ in }, runAction: { _, _ in }),
+                              topLevel: true)
+            .padding(.horizontal, appearance.paddingHorizontal)
+            .padding(.vertical, appearance.paddingVertical)
+            .frame(width: popup.style.width.map { CGFloat($0) })
+            .modifier(PopupBackground(style: resolved, glass: look.bar.glass, backgrounds: PopupBackgrounds()))
+            .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+    }
+
+    /// The end of the sample bar on `alignment`'s side, fading out toward the middle.
+    private func end(of look: Configuration, alignment: Alignment) -> some View {
+        ThemeSampleBar(look: look)
+            .fixedSize()
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: alignment)
+            .clipped()
+            .mask {
+                LinearGradient(stops: [.init(color: .black, location: 0.75), .init(color: .clear, location: 1)],
+                               startPoint: alignment == .leading ? .leading : .trailing,
+                               endPoint: alignment == .leading ? .trailing : .leading)
+            }
     }
 }
 
