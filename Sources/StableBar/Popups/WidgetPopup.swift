@@ -398,11 +398,14 @@ final class WidgetPopup {
                                styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.opensUpward = upward
         let host = NSHostingView(rootView: PopupCanvas(size: panel.size, inset: shadowInset, upward: upward) {
-            PopupView(popup: popup, style: style, store: store, widget: widget, backgrounds: backgrounds, navigation: panel.navigation)
+            PopupView(popup: popup, style: style, store: store, widget: widget, backgrounds: backgrounds, navigation: panel.navigation,
+                      size: panel.size)
                 .environment(\.screenKind, ScreenKind(BarDisplay(screen: screen)))
                 .frame(idealWidth: width, maxWidth: .infinity)
                 .onPreferenceChange(PopupHeightPreference.self) { [weak self, weak panel] contentHeight in
                     guard popup.height == nil, let panel, let self, !self.pins.resized.contains(widget.id) else { return }
+                    let follows = contentHeight <= maximumHeight
+                    if panel.size.followsContent != follows { panel.size.followsContent = follows }
                     let shadow: NSWindow?
                     if panel === self.panel {
                         shadow = self.shadowWindow
