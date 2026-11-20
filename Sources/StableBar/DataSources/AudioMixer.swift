@@ -74,7 +74,7 @@ final class AudioMixer {
             var address = Self.address(kAudioProcessPropertyPID)
             guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &pid) == noErr, pid != own else { return nil }
             let name = NSRunningApplication(processIdentifier: pid)?.localizedName ?? Self.processName(pid)
-            let bundleID = Self.string(of: object, at: Self.address(kAudioProcessPropertyBundleID)).flatMap { $0.isEmpty ? nil : $0 } ?? name
+            let bundleID = AudioMonitor.string(of: object, at: Self.address(kAudioProcessPropertyBundleID)).flatMap { $0.isEmpty ? nil : $0 } ?? name
             return MixerState.Client(object: object, bundleID: bundleID, name: name,
                                       playing: AudioMonitor.flag(of: object, at: Self.address(kAudioProcessPropertyIsRunningOutput)))
         }
@@ -85,11 +85,11 @@ final class AudioMixer {
         perform(state.handle(.processesChanged(found, apps: running)))
         let outputs = AudioMonitor.objects(of: system, at: Self.address(kAudioHardwarePropertyDevices)).compactMap { device -> MixerState.Output? in
             guard AudioMonitor.hasStreams(device, scope: kAudioDevicePropertyScopeOutput),
-                  let uid = Self.string(of: device, at: Self.address(kAudioDevicePropertyDeviceUID)), !uid.hasPrefix(AppAudioTap.uidPrefix),
+                  let uid = AudioMonitor.string(of: device, at: Self.address(kAudioDevicePropertyDeviceUID)), !uid.hasPrefix(AppAudioTap.uidPrefix),
                   let name = try? AudioMonitor.name(of: device) else { return nil }
             return MixerState.Output(uid: uid, name: name)
         }
-        let defaultOutput = (try? AudioMonitor.defaultDevice(input: false)).flatMap { Self.string(of: $0, at: Self.address(kAudioDevicePropertyDeviceUID)) }
+        let defaultOutput = (try? AudioMonitor.defaultDevice(input: false)).flatMap { AudioMonitor.string(of: $0, at: Self.address(kAudioDevicePropertyDeviceUID)) }
         perform(state.handle(.outputsChanged(outputs, defaultOutput: defaultOutput)))
     }
 
@@ -154,14 +154,6 @@ final class AudioMixer {
 
     private nonisolated static func address(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
         AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-    }
-
-    private nonisolated static func string(of object: AudioObjectID, at address: AudioObjectPropertyAddress) -> String? {
-        var address = address
-        var value: Unmanaged<CFString>?
-        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr, let value else { return nil }
-        return value.takeRetainedValue() as String
     }
 
     /// A process without an app, such as `afplay`, goes by its executable's name.
