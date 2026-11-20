@@ -40,9 +40,13 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 - **The mixer checks and asks for System Audio Recording through TCC** (2026-11-20, [#876]). Per-app volume and output play each app back through a Core Audio process tap, which needs System Audio Recording, and no public call checks that permission or asks for it. Without them, a tap the person declined plays silence while it mutes the app, so the mixer uses TCC's `TCCAccessPreflight` and `TCCAccessRequest`, asks only on the first change to an app and never in setup, and turns off on a macOS without them.
 - **The configuration file is public API** (2026-10-26, [#337]). People's files, Store packages and themes depend on it, so changes are additive. Renaming or removing a property, or changing what it means, needs a migration, a test that loads the old form and a maintainer's OK. StableBar 0.9.0 and later, and betas built after [#337], skip the properties they don't know, with a warning, once the configuration says a newer release wrote it. Earlier versions stop at the first one. The [guide](docs/configuration.md#files-from-a-newer-stablebar) has the exact rules. Migrations of an old form run in memory on every file the loader reads, so includes and packages stay as they are, and are saved into the main file and screen setups' own bars at launch. A migration of values people can still choose skips files pinned to a release ([#223]).
 - **Theme links carry only a theme** (2026-11-16, [#676]). A
-  `stablebar://theme?v=1&package=…&config=…` link carries only `package.json` and `config.json`: at
-  most 64 KB for the URL, 32 KB for the two decoded files together, 32 levels of JSON nesting, 16
-  profiles and 372 JSON values across both files. Reference expansion shares a budget of 300,000
+  `stablebar://theme?v=1&package=…&config=…` link carries only `package.json` and `config.json`; a
+  `stablebar://theme?v=2&d=…` link carries them as the strings `package` and `config` of one JSON
+  payload, compressed and encoded as a bar link's `d`. Either holds at most 64 KB for the URL, 128 KB
+  for the two decoded files together and for a `v=2` payload, 32 levels of JSON nesting, 16 profiles
+  and 4,096 JSON values across both files. The first caps were 32 KB and 372 values, four times the
+  values of the largest bundled theme of the time. Dot and Gloss outgrew them, so since [#873] they
+  match a bar link's payload, at least twice the largest included theme. Reference expansion shares a budget of 300,000
   units and 8,000,000 bytes of reference origin paths; a link exceeding either is refused as too
   many references. Theme configuration keys are `tokens`,
   `defaults`, `popupDefaults`, `groupDefaults`, `roles`, `workspaceDefaults`, `bar`, `groups` and `profiles`. Other
@@ -106,7 +110,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   of it with the right-hand ones, where a bar made on a wide monitor doesn't fit. Other screens
   keep them centered. Limits: 64 KB for the URL,
   128 KB for the decoded payload, 32 levels of JSON nesting and 4,096 JSON values. Theme links
-  don't change.
+  have had the same caps since [#873].
 - **A native provider may read a macOS tool's output** (2026-11-16, [#220]). When no public API gives the data and the tool needs no permission, a native provider can run a macOS command-line tool, off the main actor and without a shell: `bluetooth` reads every connected device's battery from `system_profiler`. Apple doesn't document the tool's output keys, so a missing or renamed key leaves that value empty instead of failing the provider.
 - **A package can't move another party's credentials** (2026-11-17, [#85], [#744]). A package may set the `url` of a provider, directly or in a profile, only when no file or profile gives that provider a token other than one of that package's own secrets, and no other file sets its `headers`. A package without commands can reach the Store after CI alone, so it must not point your token, a header you typed or another package's secret at its own host. In its own files, a package writes out each provider's `url` and `headers`, without `@token.` references, so StableBar needn't follow tokens to see where a request goes or what it sends. The check doesn't work out which profiles can be active together, so it can refuse an unusual but harmless setup. URLs and headers set in your own files stay free, `@token.` references included.
 - **Tests keep their own time** (2026-11-08, [#491]). Code whose tests depend on time takes a clock, and the test clock lives in the repository rather than in a new dependency.

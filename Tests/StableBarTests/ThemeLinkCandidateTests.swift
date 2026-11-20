@@ -708,7 +708,7 @@ struct ThemeLinkCandidateTests {
         link.manifest = try configurationData(manifest)
         link.configuration = try configurationData(configuration)
         switch rejection {
-        case .tooLarge: link.configuration = Data((#"{"tokens":{"large":""# + String(repeating: "x", count: 32_768) + #""}}"#).utf8)
+        case .tooLarge: link.configuration = Data((#"{"tokens":{"large":""# + String(repeating: "x", count: ThemeLink.maximumFileBytes) + #""}}"#).utf8)
         case .tooDeep: link.configuration = Data((#"{"tokens":{"deep":"# + String(repeating: "[", count: 500) + "0" + String(repeating: "]", count: 500) + "}}").utf8)
         case .tooManyProfiles: link.configuration = try configurationData(["profiles": .array((0..<17).map { profile([:], name: "p\($0)") })])
         case .tooManyNestedProfiles:
@@ -850,7 +850,7 @@ struct ThemeLinkCandidateTests {
             #expect(candidate.validationExpansionUnits < 300_000)
             #expect(candidate.validationOriginPathBytes < 8_000_000)
         }
-        #expect(ThemeLink.maximumValues >= 4 * largestConfiguration)
+        #expect(ThemeLink.maximumValues >= 2 * largestConfiguration)
     }
 
     @Test func longKeyOriginsShareOneAllowanceAcrossDisabledProfiles() throws {
@@ -1699,7 +1699,7 @@ struct ThemeLinkCandidateTests {
         return count(try JSONSerialization.jsonObject(with: data))
     }
 
-    private func longKeyLink(profileCount: Int, groups: Int = 10) throws -> ThemeLink {
+    private func longKeyLink(profileCount: Int, groups: Int = 2) throws -> ThemeLink {
         var link = try linkedTheme()
         func configuration(keyBytes: Int) throws -> Data {
             let tokens: [String: ConfigurationValue] = [
