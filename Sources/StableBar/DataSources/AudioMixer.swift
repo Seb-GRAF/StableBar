@@ -136,7 +136,7 @@ final class AudioMixer {
     }
 
     /// Runs `work` on the taps after the work before it, off the main actor, since starting and stopping a tap waits for
-    /// CoreAudio. When it fails, the app's tap ends and the app plays as macOS does; `failing` names the plan it was for.
+    /// CoreAudio. When it fails, `MixerState` hears of the plan named by `failing` and ends the app's tap.
     private func onTaps(failing plan: (id: String, tap: MixerState.Tap)? = nil, _ work: @escaping @Sendable (Taps) throws -> Void) {
         let previous = tapsTail
         tapsTail = Task { [taps] in
@@ -144,9 +144,7 @@ final class AudioMixer {
             do {
                 try await BlockingWork.run { try work(taps) }
             } catch {
-                guard let plan else { return }
-                _ = try? await BlockingWork.run { taps.byApp.removeValue(forKey: plan.id)?.stop() }
-                perform(state.handle(.tapFailed(plan.id, plan.tap)))
+                if let plan { perform(state.handle(.tapFailed(plan.id, plan.tap))) }
             }
         }
     }

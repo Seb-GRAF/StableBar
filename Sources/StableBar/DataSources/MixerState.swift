@@ -63,6 +63,7 @@ struct MixerState: StateMachine, Equatable {
         case setOutput(String, String?)
         /// The app's tap couldn't start or play as `Tap` planned: it plays as macOS does until its processes or its
         /// output change. A failure of a tap since replaced by one with other processes or another output changes nothing.
+        /// The tap stops after the work already queued for it, which may have started the same plan again.
         case tapFailed(String, Tap)
     }
 
@@ -115,6 +116,7 @@ struct MixerState: StateMachine, Equatable {
         case let .tapFailed(id, tap):
             guard let current = taps[id], current.processes == tap.processes, current.output == tap.output else { break }
             failed[id] = taps.removeValue(forKey: id)
+            effects = [.stopTap(id)]
         }
         return effects + tapEffects()
     }

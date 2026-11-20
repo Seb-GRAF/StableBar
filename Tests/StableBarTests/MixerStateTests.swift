@@ -96,7 +96,7 @@ private func mixer(settings: [String: MixerState.Setting] = [:], permission: Mix
 
 @Test func aTapThatFailedIsTriedAgainOnlyWhenItWouldDiffer() {
     var state = mixer(settings: ["com.apple.Music": .init(volume: 0.5)])
-    #expect(state.handle(.tapFailed("com.apple.Music", state.taps["com.apple.Music"]!)).isEmpty)
+    #expect(state.handle(.tapFailed("com.apple.Music", state.taps["com.apple.Music"]!)) == [.stopTap("com.apple.Music")])
     #expect(state.handle(.processesChanged([music], apps: ["com.apple.Music": "Music"])).isEmpty)
     #expect(state.handle(.setOutput("com.apple.Music", "headphones")).last
             == .startTap("com.apple.Music", .init(processes: [10], output: "headphones", gain: 0.25, playing: true)))
@@ -115,14 +115,14 @@ private func mixer(settings: [String: MixerState.Setting] = [:], permission: Mix
     var state = mixer(settings: ["com.apple.Music": .init(volume: 0.5)])
     let started = state.taps["com.apple.Music"]!
     _ = state.handle(.setVolume("com.apple.Music", 0.8))
-    #expect(state.handle(.tapFailed("com.apple.Music", started)).isEmpty)
+    #expect(state.handle(.tapFailed("com.apple.Music", started)) == [.stopTap("com.apple.Music")])
     #expect(state.taps["com.apple.Music"] == nil)
 }
 
 @Test func anOutputThatFailedIsTriedAgainOnceAFallbackWorked() {
     var state = mixer()
     _ = state.handle(.setOutput("com.apple.Music", "headphones"))
-    #expect(state.handle(.tapFailed("com.apple.Music", state.taps["com.apple.Music"]!)).isEmpty)
+    #expect(state.handle(.tapFailed("com.apple.Music", state.taps["com.apple.Music"]!)) == [.stopTap("com.apple.Music")])
     #expect(state.handle(.outputsChanged([speakers], defaultOutput: "speakers")).last
             == .startTap("com.apple.Music", .init(processes: [10], output: "speakers", gain: 1, playing: true)))
     #expect(state.handle(.outputsChanged([speakers, headphones], defaultOutput: "speakers"))
@@ -136,4 +136,14 @@ private func mixer(settings: [String: MixerState.Setting] = [:], permission: Mix
     let current = state.taps["com.apple.Music"]
     #expect(state.handle(.tapFailed("com.apple.Music", replaced)).isEmpty)
     #expect(state.taps["com.apple.Music"] == current)
+}
+
+@Test func aFailureOfAStartSinceRepeatedStopsTheRepeatToo() {
+    var state = mixer(settings: ["com.apple.Music": .init(volume: 0.5)])
+    let first = state.taps["com.apple.Music"]!
+    _ = state.handle(.setOutput("com.apple.Music", "headphones"))
+    _ = state.handle(.setOutput("com.apple.Music", nil))
+    #expect(state.taps["com.apple.Music"] == first)
+    #expect(state.handle(.tapFailed("com.apple.Music", first)) == [.stopTap("com.apple.Music")])
+    #expect(state.taps["com.apple.Music"] == nil)
 }
