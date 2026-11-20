@@ -2067,7 +2067,7 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
         let tokens = try loader.document["tokens"]!.decoded([String: ConfigurationValue].self)
         for name in ["surface", "surfaceRaised", "text", "textMuted", "accent", "track", "hairline", "warning", "critical"] {
             let color = try #require(try tokens[name]?.decoded(HexColor.self), "\(manifest.id).\(name)")
-            #expect((color.light == color.dark) == (manifest.id == "notch"), "\(manifest.id).\(name)")
+            #expect((color.light == color.dark) == (manifest.id == "notch" || manifest.id == "sticker" && name == "accent"), "\(manifest.id).\(name)")
         }
     }
 }

@@ -126,7 +126,7 @@ private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
 
     let options = ThemeCatalog(packages: fixture.directory.appending(path: "packages"), themesDirectory: fixture.themes)
         .profileThemeOptions
-    #expect(options.map(\.id) == ["clear", "glass", "tonal", "slim", "dot", "gloss", "test-theme"])
+    #expect(options.map(\.id) == ["clear", "glass", "tonal", "slim", "dot", "gloss", "sticker", "test-theme"])
     #expect(options.last == ProfileThemeOption(id: "test-theme", name: "Test theme"))
 
     let withoutBundled = ThemeCatalog(packages: fixture.directory.appending(path: "packages"), themesDirectory: nil)

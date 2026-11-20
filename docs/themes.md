@@ -5,7 +5,7 @@
   <img src="images/themes-light.webp" alt="One bar shown in each theme that ships with StableBar">
 </picture>
 
-StableBar includes six themes, in this order. A new configuration starts with Clear. Themes follow the system's appearance, or the one `bar.appearance` sets.
+StableBar includes seven themes, in this order. A new configuration starts with Clear. Themes follow the system's appearance, or the one `bar.appearance` sets.
 
 | Theme | ID | Look |
 | --- | --- | --- |
@@ -15,6 +15,7 @@ StableBar includes six themes, in this order. A new configuration starts with Cl
 | **Slim** | `slim` | A thin strip of ink by night and paper by day, set in Menlo, with a square for the focused workspace. |
 | **Dot** | `dot` | Black capsules in dark and paper-grey ones in light, with a red dot under the focused workspace and sepia app icons. |
 | **Gloss** | `gloss` | Gel capsules on a pinstriped strip, with a blue gel for the focused workspace and the clock. |
+| **Sticker** | `sticker` | Flat cream stickers with an ink outline and a hard shadow, and a yellow chip for the focused workspace. |
 
 Choose one in setup or in **Settings → Theme**. Theme cards show the same sample bar in each theme's style: three workspaces, Finder, a battery and a clock. The sample shows the theme's bar, widget tiles, fonts, colors and workspace indicator, in the light or dark appearance your bar uses now. The gallery lists the **Included** themes, **Yours** (saved, shared, or opened from a link or a folder) and the **Store**'s. Click a card to apply and save it immediately; a checkmark marks your choice, and **Undo** restores the previous theme. You can also select an included theme by its ID:
 

@@ -1,0 +1,278 @@
+{
+  "tokens": {
+    "surface": {
+      "light": "#FFF6E5",
+      "dark": "#23201C"
+    },
+    "surfaceRaised": {
+      "light": "#FFFDF8",
+      "dark": "#2E2A25"
+    },
+    "text": {
+      "light": "#1B1A17",
+      "dark": "#F3EADB"
+    },
+    "textMuted": {
+      "light": "#6B6255",
+      "dark": "#B5AA98"
+    },
+    "accent": {
+      "light": "#FFCF33",
+      "dark": "#FFCF33"
+    },
+    "track": {
+      "light": "#8A6A3A33",
+      "dark": "#F3EADB2E"
+    },
+    "hairline": {
+      "light": "#8A6A3A29",
+      "dark": "#F3EADB1F"
+    },
+    "warning": {
+      "light": "#B35300",
+      "dark": "#FFA04D"
+    },
+    "critical": {
+      "light": "#D62A36",
+      "dark": "#FF5C66"
+    },
+    "ink": {
+      "light": "#1B1A17",
+      "dark": "#000000"
+    },
+    "shadow": {
+      "light": "#1B1A17",
+      "dark": "#000000"
+    },
+    "hover": {
+      "light": "#F9E3B6",
+      "dark": "#3A342C"
+    },
+    "pressed": {
+      "light": "#F2D49A",
+      "dark": "#463F36"
+    },
+    "onAccent": {
+      "light": "#1B1A17",
+      "dark": "#1B1A17"
+    },
+    "warningFill": {
+      "light": "#FFB077",
+      "dark": "#FFA04D"
+    },
+    "criticalFill": {
+      "light": "#FF7A7A",
+      "dark": "#FF5C66"
+    },
+    "activeFill": {
+      "light": "#9FE5B4",
+      "dark": "#86D9A0"
+    },
+    "warningHover": {
+      "light": "#FF9F5C",
+      "dark": "#FF8F2E"
+    },
+    "criticalHover": {
+      "light": "#FF6262",
+      "dark": "#FF4452"
+    },
+    "activeHover": {
+      "light": "#85DDA0",
+      "dark": "#6FCF8C"
+    },
+    "accentHover": {
+      "light": "#FFC21A",
+      "dark": "#FFC21A"
+    }
+  },
+  "bar": {
+    "height": 40,
+    "inset": 12,
+    "spacing": 10
+  },
+  "defaults": {
+    "foreground": "@token.text",
+    "background": "@token.surface",
+    "borderColor": "@token.ink",
+    "borderWidth": 2,
+    "cornerRadius": 6,
+    "shadowColor": "@token.shadow",
+    "shadowRadius": 0,
+    "shadowOffsetX": 3,
+    "shadowOffsetY": 3,
+    "accent": "@token.accent",
+    "accentText": "@token.onAccent",
+    "fontName": "system",
+    "fontSize": 13,
+    "fontWeight": "semibold",
+    "iconSize": 14,
+    "height": 26,
+    "paddingHorizontal": 10,
+    "paddingVertical": 0,
+    "spacing": 6,
+    "appIcons": "tinted",
+    "states": {
+      "hover": {
+        "background": "@token.hover"
+      },
+      "open": {
+        "background": "@token.pressed",
+        "states": {
+          "hover": {
+            "background": "#00000000"
+          }
+        }
+      },
+      "warning": {
+        "background": "@token.warningFill",
+        "foreground": "@token.onAccent",
+        "states": {
+          "hover": {
+            "background": "@token.warningHover"
+          },
+          "open": {
+            "background": "@token.warningHover"
+          }
+        }
+      },
+      "critical": {
+        "background": "@token.criticalFill",
+        "foreground": "@token.onAccent",
+        "states": {
+          "hover": {
+            "background": "@token.criticalHover"
+          },
+          "open": {
+            "background": "@token.criticalHover"
+          }
+        }
+      },
+      "active": {
+        "background": "@token.activeFill",
+        "foreground": "@token.onAccent",
+        "states": {
+          "hover": {
+            "background": "@token.activeHover"
+          },
+          "open": {
+            "background": "@token.activeHover"
+          }
+        }
+      },
+      "muted": {
+        "foreground": "@token.textMuted"
+      }
+    },
+    "shadowFrom": "shape"
+  },
+  "workspaceDefaults": {
+    "indicator": "cells",
+    "style": {
+      "show": "label",
+      "fontWeight": "bold",
+      "height": 18,
+      "paddingHorizontal": 6,
+      "cornerRadius": 3,
+      "spacing": 4,
+      "states": {
+        "focused": {
+          "show": "both",
+          "background": "@token.accent",
+          "foreground": "@token.onAccent"
+        },
+        "visible": {
+          "borderColor": "@token.ink",
+          "borderWidth": 2
+        },
+        "empty": {
+          "foreground": "@token.textMuted"
+        }
+      }
+    },
+    "appStyle": {
+      "width": 14,
+      "height": 14
+    }
+  },
+  "roles": {
+    "time": {
+      "fontWeight": "bold"
+    },
+    "primary": {
+      "foreground": "@token.text"
+    },
+    "secondary": {
+      "foreground": "@token.textMuted"
+    },
+    "heading": {
+      "foreground": "@token.text",
+      "fontSize": 14,
+      "fontWeight": "bold"
+    },
+    "key": {
+      "foreground": "@token.textMuted"
+    },
+    "value": {
+      "foreground": "@token.text",
+      "fontWeight": "bold"
+    },
+    "button": {
+      "background": "@token.accent",
+      "foreground": "@token.onAccent",
+      "borderColor": "@token.shadow",
+      "borderWidth": 2,
+      "cornerRadius": 6,
+      "fontWeight": "bold",
+      "paddingHorizontal": 12,
+      "paddingVertical": 5,
+      "states": {
+        "hover": {
+          "background": "@token.accentHover"
+        }
+      }
+    },
+    "meter": {
+      "accent": "@token.text",
+      "background": "@token.track",
+      "cornerRadius": 2
+    },
+    "slider": {
+      "height": 22,
+      "cornerRadius": 6,
+      "accent": "@token.accent",
+      "background": "@token.track",
+      "borderColor": "@token.ink",
+      "borderWidth": 2,
+      "accentText": "@token.onAccent"
+    },
+    "separator": {
+      "foreground": "#00000000",
+      "background": "@token.ink",
+      "height": 2
+    }
+  },
+  "popupDefaults": {
+    "foreground": "@token.text",
+    "background": "@token.surface",
+    "borderColor": "@token.ink",
+    "borderWidth": 2,
+    "cornerRadius": 10,
+    "shadowColor": "@token.shadow",
+    "shadowRadius": 0,
+    "shadowOffsetX": 4,
+    "shadowOffsetY": 4,
+    "accent": "@token.text",
+    "accentText": "@token.surface",
+    "fontName": "system",
+    "fontSize": 13,
+    "fontWeight": "regular",
+    "paddingHorizontal": 16,
+    "paddingVertical": 14,
+    "spacing": 10,
+    "states": {
+      "hover": {
+        "background": "@token.hover"
+      }
+    }
+  }
+}

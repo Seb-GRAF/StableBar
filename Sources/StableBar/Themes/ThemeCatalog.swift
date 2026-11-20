@@ -6,7 +6,7 @@ let themeTokens: [(name: String, title: String)] = [
 ]
 
 /// The included themes, in the order the gallery, setup and Try Themes show them.
-let includedThemeIDs = ["clear", "glass", "tonal", "slim", "dot", "gloss"]
+let includedThemeIDs = ["clear", "glass", "tonal", "slim", "dot", "gloss", "sticker"]
 
 /// Themes retired before retired themes moved to the Store: an update installs a copy of the one a configuration selects.
 let legacyThemeIDs: Set<String> = [

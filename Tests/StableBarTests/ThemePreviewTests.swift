@@ -8,10 +8,10 @@ final class ThemePreviewTests: XCTestCase {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let installed = try fixture.theme(#"{}"#)
-        let included = ["clear", "glass", "tonal", "slim", "dot", "gloss"]
+        let included = ["clear", "glass", "tonal", "slim", "dot", "gloss", "sticker"]
         let choices = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes).choices
         XCTAssertEqual(choices.map(\.key), included + [installed.key])
-        XCTAssertEqual(choices.map(\.title), ["Clear", "Glass", "Tonal", "Slim", "Dot", "Gloss", "Test theme · 1"])
+        XCTAssertEqual(choices.map(\.title), ["Clear", "Glass", "Tonal", "Slim", "Dot", "Gloss", "Sticker", "Test theme · 1"])
         XCTAssertEqual(choices.first?.edit.properties, ["id": .string("clear")])
         XCTAssertEqual(choices.last?.edit.properties, installed.selection)
         for retired in ["built-in", "nord", "slate"] {

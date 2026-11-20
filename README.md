@@ -59,7 +59,7 @@ Keep the active app, calendar, system stats and playback controls in reach. Widg
 
 <p><img src="docs/images/readme-themes.gif" width="100%" alt="The same bar changes through the included themes while the screen and wallpaper stay still."></p>
 
-Choose from six included themes, get more from the Store, or save your own.
+Choose from seven included themes, get more from the Store, or save your own.
 
 <p><img src="docs/images/readme-edit.gif" width="100%" alt="The pointer opens Edit Bar in Place, drags Now Playing beside the notch and clicks Done."></p>
 

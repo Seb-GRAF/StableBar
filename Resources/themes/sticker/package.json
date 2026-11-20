@@ -1,0 +1,9 @@
+{
+  "id": "sticker",
+  "name": "Sticker",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Every widget a flat cream sticker with an ink outline and a hard shadow, the focused workspace a yellow chip.",
+  "author": "StableBar"
+}
