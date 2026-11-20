@@ -44,10 +44,12 @@ const restHeight = () => parseFloat(getComputedStyle(dock).getPropertyValue("--r
 const track = { at: 87, length: 243, playing: true };
 const trackAt = document.getElementById("np-at");
 const trackBar = document.getElementById("np-bar");
-document.getElementById("np-play").addEventListener("click", e => {
+/* Now playing's popup and Sound's both play and pause it */
+const playButtons = [...pop.querySelectorAll(".play")];
+for (const b of playButtons) b.addEventListener("click", () => {
   track.playing = !track.playing;
   dock.classList.toggle("paused", !track.playing);
-  e.currentTarget.setAttribute("aria-label", track.playing ? "Pause" : "Play");
+  for (const p of playButtons) p.setAttribute("aria-label", track.playing ? "Pause" : "Play");
 });
 
 /* Clocks show the visitor's real time */
@@ -175,7 +177,7 @@ function open(id) {
   place();
 }
 for (const w of bar.querySelectorAll("[data-pop]")) w.addEventListener("click", e => {
-  if (e.target.closest("a")) return;
+  if (e.target.closest("a, input")) return;
   e.stopPropagation();
   open(w.dataset.pop);
 });
@@ -227,9 +229,42 @@ sound.addEventListener("mouseenter", () => expandSound(true));
 sound.addEventListener("mouseleave", () => { if (!sound.querySelector(":focus-visible")) expandSound(false); });
 sound.addEventListener("focusin", () => expandSound(true));
 sound.addEventListener("focusout", () => { if (!sound.matches(":hover")) expandSound(false); });
-volume.addEventListener("input", () => {
-  sound.querySelector(".pct").textContent = `${volume.value}%`;
-  volume.style.setProperty("--v", `${volume.value}%`);
+/* Sound's popup: its filled sliders, devices, mute buttons and each app's output */
+const soundPane = pop.querySelector('[data-id="sound"]');
+const fill = input => input.closest(".lvl").style.setProperty("--f", input.value / 100);
+for (const i of soundPane.querySelectorAll(".lvl input")) { fill(i); i.addEventListener("input", () => fill(i)); }
+/* The bar's slider, Now playing's and the Sound card's are one volume */
+const volumes = [volume, pop.querySelector(".np-pop .vol input"), soundPane.querySelector(".lvl input")];
+for (const v of volumes) v.addEventListener("input", () => {
+  for (const o of volumes) if (o !== v) o.value = v.value;
+  sound.querySelector(".pct").textContent = `${v.value}%`;
+  volume.style.setProperty("--v", `${v.value}%`);
+  fill(volumes[2]);
+});
+for (const b of soundPane.querySelectorAll(".rb[aria-pressed]")) b.addEventListener("click", () => {
+  const on = b.getAttribute("aria-pressed") !== "true";
+  b.setAttribute("aria-pressed", on);
+  b.closest(".app")?.classList.toggle("muted", on);
+});
+for (const c of soundPane.querySelectorAll(".chev")) c.addEventListener("click", () => {
+  const list = c.closest(".card").querySelector(".devs");
+  list.hidden = !list.hidden;
+  c.setAttribute("aria-expanded", !list.hidden);
+  place();
+});
+for (const d of soundPane.querySelectorAll(".devs button")) d.addEventListener("click", () => {
+  for (const o of d.parentElement.children) o.setAttribute("aria-pressed", o === d);
+  d.closest(".card").querySelector(".dn").textContent = d.textContent;
+});
+/* The app's output button opens a menu of devices; here each click picks the next one */
+const OUTPUTS = ["", "AirPods Pro", "Studio Display"];
+for (const b of soundPane.querySelectorAll(".rb.to")) b.addEventListener("click", () => {
+  const app = b.closest(".app");
+  const out = OUTPUTS[(OUTPUTS.indexOf(app.dataset.out || "") + 1) % OUTPUTS.length];
+  app.dataset.out = out;
+  app.querySelector(".out").textContent = out;
+  b.classList.toggle("on", Boolean(out));
+  b.ariaLabel = `Output for ${app.dataset.app}: ${out || "Default Output"}`;
 });
 /* Those two change the widgets' widths, and a new theme the bar's height: the ball game measures the bar again once they settle */
 bar.addEventListener("transitionend", e => { if ((e.propertyName === "grid-template-columns" || e.target === bar && e.propertyName === "height") && !editing) sendBar(); });

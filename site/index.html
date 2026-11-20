@@ -99,6 +99,17 @@ try {
   <symbol id="i-pause" viewBox="0 0 16 16"><rect x="3.8" y="2.8" width="3" height="10.4" rx=".8" fill="currentColor"/><rect x="9.2" y="2.8" width="3" height="10.4" rx=".8" fill="currentColor"/></symbol>
   <symbol id="i-vol" viewBox="0 0 16 16"><path d="M2.5 6h2.4L8.5 3v10L4.9 10H2.5z" fill="currentColor"/></symbol>
 
+  <!-- the Sound and System popups, after the app's symbols -->
+  <symbol id="i-snd-f" viewBox="0 0 16 16"><path d="M1.6 5.8h2.6L8 2.6v10.8L4.2 10.2H1.6z" fill="currentColor"/><path d="M10.4 5.4a3.6 3.6 0 0 1 0 5.2M12.5 3.4a6.4 6.4 0 0 1 0 9.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 16 16"><mask id="m-mute"><rect width="16" height="16" fill="#fff"/><path d="M1.6 1.6 14.4 14.4" stroke="#000" stroke-width="3.8"/></mask><path mask="url(#m-mute)" d="M2.6 5.8h2.6L9 2.6v10.8L5.2 10.2H2.6z" fill="currentColor"/><path d="M2.4 2.4 13.6 13.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 16 16"><rect x="5.4" y="1.2" width="5.2" height="8.6" rx="2.6" fill="currentColor"/><path d="M3.4 7.4a4.6 4.6 0 0 0 9.2 0M8 12v2.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-mic-off" viewBox="0 0 16 16"><mask id="m-mic"><rect width="16" height="16" fill="#fff"/><path d="M1.6 1.6 14.4 14.4" stroke="#000" stroke-width="3.8"/></mask><g mask="url(#m-mic)"><rect x="5.4" y="1.2" width="5.2" height="8.6" rx="2.6" fill="currentColor"/><path d="M3.4 7.4a4.6 4.6 0 0 0 9.2 0M8 12v2.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></g><path d="M2.4 2.4 13.6 13.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M3.8 6.2 8 10.4l4.2-4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-hifi" viewBox="0 0 16 16"><path fill="currentColor" fill-rule="evenodd" d="M5.4 1.2h5.2a2 2 0 0 1 2 2v9.6a2 2 0 0 1-2 2H5.4a2 2 0 0 1-2-2V3.2a2 2 0 0 1 2-2ZM8 3.3a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2Zm0 4.1a2.7 2.7 0 1 0 0 5.4 2.7 2.7 0 0 0 0-5.4Z"/></symbol>
+  <symbol id="i-check-c" viewBox="0 0 16 16"><mask id="m-check"><rect width="16" height="16" fill="#fff"/><path d="m5 8.2 2.1 2.1L11.2 6" fill="none" stroke="#000" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></mask><circle cx="8" cy="8" r="6.8" fill="currentColor" mask="url(#m-check)"/></symbol>
+  <symbol id="i-circle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
+  <symbol id="i-x-c" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="m5.9 5.9 4.2 4.2m0-4.2-4.2 4.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></symbol>
+
   <!-- Add here picker, 16 grid -->
   <symbol id="i-plus" viewBox="0 0 12 12"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
   <symbol id="i-get" viewBox="0 0 16 16"><path d="M8 2.5v10M4 8.8 8 12.8l4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -169,7 +180,7 @@ try {
       <button class="w np" data-key="np" data-pri="3" data-pop="np" aria-expanded="false" aria-label="Now playing: Midnight City · M83"><i class="art"></i><span class="track">Midnight City · M83</span><span class="eq"><i></i><i></i><i></i><i></i></span></button>
       <button class="w" data-key="meeting" data-pri="1" data-pop="agenda" aria-expanded="false"><svg><use href="#i-cal"/></svg>Design review&nbsp;&nbsp;10:30</button>
       <button class="w" data-key="system" data-pri="0" data-pop="system" aria-expanded="false"><svg><use href="#i-cpu"/></svg><span class="vh">CPU </span>18%<span class="vh">,</span>&nbsp;&nbsp;<svg><use href="#i-mem"/></svg><span class="vh">memory </span>54%</button>
-      <div class="w snd" data-key="sound" data-pri="0"><span class="slide"><span><input type="range" min="0" max="100" value="64" aria-label="Volume"><span class="pct num">64%</span></span></span><svg role="img" aria-label="Sound"><use href="#i-snd"/></svg></div>
+      <div class="w snd" data-key="sound" data-pri="0" data-pop="sound"><span class="slide"><span><input type="range" min="0" max="100" value="64" aria-label="Volume"><span class="pct num">64%</span></span></span><button type="button" aria-label="Sound" aria-expanded="false"><svg aria-hidden="true"><use href="#i-snd"/></svg></button></div>
       <div class="w" data-key="battery" data-pri="1"><svg style="width:19px"><use href="#i-bat"/></svg><span class="vh">Battery </span>82%</div>
       <div class="w num clock" data-key="clock" data-pri="5" data-format="full">Thu 22 Oct&nbsp;&nbsp;09:41</div>
       <a class="w dl" data-key="dl" data-pri="9" href="https://github.com/stablebox/StableBar/releases/download/v0.18.0/StableBar.dmg"><span><svg><use href="#i-down"/></svg>Download</span></a>
@@ -183,7 +194,7 @@ try {
       <button data-for="np" data-open="np"><i class="art"></i>Midnight City · M83</button>
       <button data-for="meeting" data-open="agenda"><svg><use href="#i-cal"/></svg>Design review&nbsp;&nbsp;10:30</button>
       <button data-for="system" data-open="system"><svg><use href="#i-cpu"/></svg>CPU 18%&nbsp;&nbsp;Memory 54%</button>
-      <button data-for="sound"><svg><use href="#i-snd"/></svg>Sound</button>
+      <button data-for="sound" data-open="sound"><svg><use href="#i-snd"/></svg>Sound</button>
       <button data-for="battery"><svg><use href="#i-bat"/></svg>Battery 82%</button>
       <button data-for="clock" class="clock" data-format="full">Thu 22 Oct&nbsp;&nbsp;09:41</button>
       <button data-for="app">Finder</button>
@@ -220,15 +231,72 @@ try {
       <div class="sep"></div>
       <div>Calendar</div>
     </div>
-    <div class="pane" data-id="system" style="width:260px">
-      <p class="hd">System</p>
-      <svg class="graph" viewBox="0 0 220 44" preserveAspectRatio="none"><polyline points="0,30 14,27 28,31 42,24 56,26 70,22 84,29 98,25 112,27 126,18 140,23 154,13 168,28 182,24 196,26 210,20 220,22"/></svg>
-      <div class="kv"><span>CPU</span><span>18 %</span></div>
-      <div class="meter"><i style="width:18%"></i></div>
-      <div class="kv"><span>Memory</span><span>54 %</span></div>
-      <div class="meter"><i style="width:54%"></i></div>
+    <div class="pane sys-pop" data-id="system">
+      <div class="cols">
+        <div>
+          <p class="big"><span><svg><use href="#i-cpu"/></svg>CPU</span><b class="num">18%</b></p>
+          <svg class="graph" viewBox="0 0 220 44" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,30 14,27 28,31 42,24 56,26 70,22 84,29 98,25 112,27 126,18 140,23 154,13 168,28 182,24 196,26 210,20 220,22"/></svg>
+          <p class="kv"><span>User</span><span>11%</span></p>
+          <p class="kv"><span>System</span><span>7%</span></p>
+          <p class="kv"><span>Load</span><span>2.14 2.40 2.31</span></p>
+          <p class="kv"><span>Thermal</span><span>Nominal</span></p>
+        </div>
+        <div>
+          <p class="big"><span><svg><use href="#i-mem"/></svg>Memory</span><b class="num">54%</b></p>
+          <div class="bar-m"><div class="meter"><i style="width:54%"></i></div></div>
+          <p class="kv"><span>Used</span><span>8.6 GB</span></p>
+          <p class="kv"><span>Compressed</span><span>1.2 GB</span></p>
+          <p class="kv"><span>Swap</span><span>Zero KB</span></p>
+          <p class="kv"><span>Pressure</span><span>Normal</span></p>
+        </div>
+      </div>
       <div class="sep"></div>
-      <div>Activity Monitor</div>
+      <div class="apps">
+        <p class="ah"><b>Apps</b><span>Memory</span><span>CPU</span><i></i></p>
+        <p><img class="ai" src="images/apps/ollama.webp" alt="" width="18" height="18"><span>Ollama</span><span>2.41 GB</span><span>3%</span><svg role="img" aria-label="Quit Ollama"><use href="#i-x-c"/></svg></p>
+        <p><img class="ai" src="images/apps/chromium.webp" alt="" width="18" height="18"><span>Chromium</span><span>1.62 GB</span><span>6%</span><svg role="img" aria-label="Quit Chromium"><use href="#i-x-c"/></svg></p>
+        <p><img class="ai" src="images/apps/t3-code.webp" alt="" width="18" height="18"><span>T3 Code</span><span>948 MB</span><span>4%</span><svg role="img" aria-label="Quit T3 Code"><use href="#i-x-c"/></svg></p>
+      </div>
+      <div class="sep"></div>
+      <p class="ft"><span>Up 3d 4h</span><span class="lnk"><svg><use href="#i-open"/></svg>Activity Monitor</span></p>
+    </div>
+    <div class="pane snd-pop" data-id="sound">
+      <div class="card" data-name="Sound">
+        <div class="hd2"><p><b>Sound</b><span class="dn">MacBook Pro Speakers</span></p><button type="button" class="rb chev" aria-label="Sound devices" aria-expanded="false"><svg><use href="#i-chev"/></svg></button></div>
+        <div class="lv"><label class="lvl"><i></i><svg><use href="#i-snd-f"/></svg><input type="range" min="0" max="100" value="64" aria-label="Volume"></label><button type="button" class="rb" aria-label="Mute sound" aria-pressed="false"><svg><use href="#i-mute"/></svg></button></div>
+        <div class="devs" hidden>
+          <button type="button" aria-pressed="true"><svg class="y"><use href="#i-check-c"/></svg><svg class="n"><use href="#i-circle"/></svg>MacBook Pro Speakers</button>
+          <button type="button" aria-pressed="false"><svg class="y"><use href="#i-check-c"/></svg><svg class="n"><use href="#i-circle"/></svg>AirPods Pro</button>
+          <button type="button" aria-pressed="false"><svg class="y"><use href="#i-check-c"/></svg><svg class="n"><use href="#i-circle"/></svg>Studio Display</button>
+        </div>
+      </div>
+      <div class="card" data-name="Microphone">
+        <div class="hd2"><p><b>Microphone</b><span class="dn">MacBook Pro Microphone</span></p><button type="button" class="rb chev" aria-label="Microphone devices" aria-expanded="false"><svg><use href="#i-chev"/></svg></button></div>
+        <div class="lv"><label class="lvl"><i></i><svg><use href="#i-mic"/></svg><input type="range" min="0" max="100" value="72" aria-label="Input volume"></label><button type="button" class="rb" aria-label="Mute microphone" aria-pressed="false"><svg><use href="#i-mic-off"/></svg></button></div>
+        <div class="devs" hidden>
+          <button type="button" aria-pressed="true"><svg class="y"><use href="#i-check-c"/></svg><svg class="n"><use href="#i-circle"/></svg>MacBook Pro Microphone</button>
+          <button type="button" aria-pressed="false"><svg class="y"><use href="#i-check-c"/></svg><svg class="n"><use href="#i-circle"/></svg>AirPods Pro</button>
+        </div>
+      </div>
+      <div class="card music">
+        <i class="art"></i>
+        <p><b>Midnight City<span class="eq"><i></i><i></i><i></i><i></i></span></b><span>M83</span></p>
+        <button type="button" aria-label="Previous"><svg><use href="#i-prev"/></svg></button>
+        <button type="button" class="play" aria-label="Pause"><svg class="pause"><use href="#i-pause"/></svg><svg class="resume"><use href="#i-play"/></svg></button>
+        <button type="button" aria-label="Next"><svg><use href="#i-next"/></svg></button>
+      </div>
+      <div class="card apps">
+        <b>Apps</b>
+        <div class="app" data-app="Music">
+          <p><span class="ai mi"><svg><use href="#i-note"/></svg></span><span>Music</span><span class="eq"><i></i><i></i><i></i><i></i></span><span class="out"></span></p>
+          <div class="lv"><label class="lvl"><i></i><svg><use href="#i-snd-f"/></svg><input type="range" min="0" max="100" value="80" aria-label="Music volume"></label><button type="button" class="rb" aria-label="Mute Music" aria-pressed="false"><svg><use href="#i-mute"/></svg></button><button type="button" class="rb to" aria-label="Output for Music: Default Output"><svg><use href="#i-hifi"/></svg></button></div>
+        </div>
+        <div class="app" data-app="Chromium" data-out="Studio Display">
+          <p><img class="ai" src="images/apps/chromium.webp" alt="" width="18" height="18"><span>Chromium</span><span class="out">Studio Display</span></p>
+          <div class="lv"><label class="lvl"><i></i><svg><use href="#i-snd-f"/></svg><input type="range" min="0" max="100" value="45" aria-label="Chromium volume"></label><button type="button" class="rb" aria-label="Mute Chromium" aria-pressed="false"><svg><use href="#i-mute"/></svg></button><button type="button" class="rb to on" aria-label="Output for Chromium: Studio Display"><svg><use href="#i-hifi"/></svg></button></div>
+        </div>
+      </div>
+      <p class="lnk">Sound Settings…</p>
     </div>
   </div>
 
