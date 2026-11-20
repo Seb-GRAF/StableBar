@@ -514,6 +514,8 @@ final class WidgetPopup {
             GlassBackground(fill: style.background, glass: glass, surface: \.popups, shape: Rectangle()))), size: union.size)
         let outline = CALayer()
         outline.borderWidth = appearance.borderWidth
+        // The fill's layer, which AppKit adds when the window first draws, would otherwise cover the outline.
+        outline.zPosition = 1
         panel.effectiveAppearance.performAsCurrentDrawingAppearance {
             outline.borderColor = NSColor(appearance.border(increasedContrast: NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast)).cgColor
         }
