@@ -44,10 +44,12 @@ const restHeight = () => parseFloat(getComputedStyle(dock).getPropertyValue("--r
 const track = { at: 87, length: 243, playing: true };
 const trackAt = document.getElementById("np-at");
 const trackBar = document.getElementById("np-bar");
-document.getElementById("np-play").addEventListener("click", e => {
+/* Now playing's popup and Sound's both play and pause it */
+const playButtons = [...pop.querySelectorAll(".play")];
+for (const b of playButtons) b.addEventListener("click", () => {
   track.playing = !track.playing;
   dock.classList.toggle("paused", !track.playing);
-  e.currentTarget.setAttribute("aria-label", track.playing ? "Pause" : "Play");
+  for (const p of playButtons) p.setAttribute("aria-label", track.playing ? "Pause" : "Play");
 });
 
 /* Clocks show the visitor's real time */
@@ -163,6 +165,7 @@ const popButton = w => w.matches("button") ? w : w.querySelector(":scope > butto
 function open(id) {
   if (id !== openId && anchorFor(id).hidden) return;
   hideTour();
+  closeMenu();
   const from = openId;
   openId = openId === id ? null : id;
   pop.classList.toggle("morph", Boolean(from && openId));
@@ -183,7 +186,7 @@ for (const b of menu.querySelectorAll("[data-open]")) b.addEventListener("click"
 document.addEventListener("click", e => { if (openId && !e.target.closest(".pop, .win, .tag, .w")) open(openId); });
 /* Escape closes the popup and returns focus to its widget */
 document.addEventListener("keydown", e => {
-  if (e.key !== "Escape" || !openId) return;
+  if (e.key !== "Escape" || !openId || !ctx.hidden) return;
   const from = pop.contains(document.activeElement) && anchorFor(openId);
   open(openId);
   if (from) (popButton(from) || from).focus();
@@ -216,22 +219,45 @@ finder.addEventListener("mouseenter", () => {
 });
 finder.addEventListener("mouseleave", () => { finder.classList.remove("expand"); setTimeout(place, 320); });
 
-/* Sound opens its volume slider on hover, when the bar has room for it */
-const sound = bar.querySelector(".snd");
-const volume = sound.querySelector("input");
-function expandSound(open) {
-  sound.classList.toggle("expand", open && needed() + sound.querySelector(".slide > span").scrollWidth + 7 <= bar.clientWidth);
-  setTimeout(place, 320);
-}
-sound.addEventListener("mouseenter", () => expandSound(true));
-sound.addEventListener("mouseleave", () => { if (!sound.querySelector(":focus-visible")) expandSound(false); });
-sound.addEventListener("focusin", () => expandSound(true));
-sound.addEventListener("focusout", () => { if (!sound.matches(":hover")) expandSound(false); });
-volume.addEventListener("input", () => {
-  sound.querySelector(".pct").textContent = `${volume.value}%`;
-  volume.style.setProperty("--v", `${volume.value}%`);
+/* Sound's popup: its filled sliders, devices, mute buttons and each app's output */
+const soundPane = pop.querySelector('[data-id="sound"]');
+const fill = input => input.closest(".lvl").style.setProperty("--f", input.value / 100);
+for (const i of soundPane.querySelectorAll(".lvl input")) { fill(i); i.addEventListener("input", () => fill(i)); }
+/* Now playing's slider and the Sound card's are one volume */
+const volumes = [pop.querySelector(".np-pop .vol input"), soundPane.querySelector(".lvl input")];
+for (const v of volumes) v.addEventListener("input", () => {
+  for (const o of volumes) if (o !== v) o.value = v.value;
+  fill(volumes[1]);
 });
-/* Those two change the widgets' widths, and a new theme the bar's height: the ball game measures the bar again once they settle */
+for (const b of soundPane.querySelectorAll(".rb[aria-pressed]")) b.addEventListener("click", () => {
+  const on = b.getAttribute("aria-pressed") !== "true";
+  b.setAttribute("aria-pressed", on);
+  b.closest(".app")?.classList.toggle("muted", on);
+});
+for (const c of soundPane.querySelectorAll(".chev")) c.addEventListener("click", () => {
+  const list = c.closest(".card").querySelector(".devs");
+  list.hidden = !list.hidden;
+  c.setAttribute("aria-expanded", !list.hidden);
+  place();
+});
+for (const d of soundPane.querySelectorAll(".devs button")) d.addEventListener("click", () => {
+  for (const o of d.parentElement.children) o.setAttribute("aria-pressed", o === d);
+  d.closest(".card").querySelector(".dn").textContent = d.textContent;
+});
+/* Each app's output button opens a menu of the outputs, with Default Output first */
+const OUTPUTS = ["", "MacBook Pro Speakers", "AirPods Pro", "Studio Display"];
+for (const b of soundPane.querySelectorAll(".rb.to")) b.addEventListener("click", e => {
+  e.stopPropagation();
+  if (!ctx.hidden && menuFrom === b) return closeMenu();
+  const app = b.closest(".app"), r = b.getBoundingClientRect();
+  showMenu(r.left, r.bottom, OUTPUTS.map(out => [out || "Default Output", () => {
+    app.dataset.out = out;
+    app.querySelector(".out").textContent = out;
+    b.classList.toggle("on", Boolean(out));
+    b.ariaLabel = `Output for ${app.dataset.app}: ${out || "Default Output"}`;
+  }, out === (app.dataset.out || "")]), b);
+});
+/* The app's menus change its width, and a new theme the bar's height: the ball game measures the bar again once they settle */
 bar.addEventListener("transitionend", e => { if ((e.propertyName === "grid-template-columns" || e.target === bar && e.propertyName === "height") && !editing) sendBar(); });
 
 /* Once the page scrolls, a strip of sky slides in behind the bar. Once the headline has gone
@@ -328,7 +354,6 @@ function beginEditing(from) {
   dockState();
   past = [];
   future = [];
-  sound.classList.remove("expand");
   finder.classList.remove("expand");
   for (const [i, g] of trays.entries()) {
     const l = document.createElement("div");
@@ -757,19 +782,31 @@ document.querySelector(".pkgs").addEventListener("click", e => {
 });
 pkgReview.addEventListener("click", e => e.stopPropagation());
 
-/* Right-click the bar, as in the app: Edit Bar in Place, or a widget's moves while editing */
-function showMenu(x, y, items) {
+/* Right-click the bar, as in the app: Edit Bar in Place, or a widget's moves while editing.
+   An item with a third value is a choice, checked when it's true; `from` gets focus back when the menu closes. */
+let menuFrom = null;
+function showMenu(x, y, items, from = null) {
   closeAdd();
-  ctx.innerHTML = items.map(item => item ? `<button role="menuitem">${item[0]}</button>` : "<hr>").join("");
+  closeMenu();
+  const choices = items.some(item => item?.length > 2);
+  ctx.classList.toggle("choices", choices);
+  ctx.innerHTML = items.map(item => !item ? "<hr>" : choices ? `<button role="menuitemradio" aria-checked="${Boolean(item[2])}">${item[0]}</button>` : `<button role="menuitem">${item[0]}</button>`).join("");
   const actions = items.filter(Boolean).map(item => item[1]);
   ctx.querySelectorAll("button").forEach((b, k) => b.addEventListener("click", e => { e.stopPropagation(); closeMenu(); actions[k](); }));
   ctx.hidden = false;
+  menuFrom = from;
+  from?.setAttribute("aria-expanded", "true");
   const dr = dock.getBoundingClientRect();
   ctx.style.left = `${clamp(x - dr.left, 4, dr.width - ctx.offsetWidth - 4)}px`;
   ctx.style.top = `${y - dr.top + 2}px`;
-  ctx.querySelector("button").focus({ preventScroll: true });
+  (ctx.querySelector('[aria-checked="true"]') || ctx.querySelector("button")).focus({ preventScroll: true });
 }
-function closeMenu() { ctx.hidden = true; }
+function closeMenu() {
+  if (menuFrom && !ctx.hidden && ctx.contains(document.activeElement)) menuFrom.focus({ preventScroll: true });
+  menuFrom?.setAttribute("aria-expanded", "false");
+  menuFrom = null;
+  ctx.hidden = true;
+}
 bar.addEventListener("contextmenu", e => {
   if (innerWidth < 720 || e.target.closest(".menus a")) return;
   e.preventDefault();

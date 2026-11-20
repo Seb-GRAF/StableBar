@@ -263,17 +263,6 @@ main { position: relative; z-index: 1; overflow-x: clip; }
 .menus a { text-decoration: none; }
 .app.expand .menus { grid-template-columns: 1fr; }
 .w.more { padding: 0 9px; letter-spacing: .08em; }
-/* Sound: hovering it opens a volume slider before the icon, as on the right of the real bar */
-.snd .slide { display: grid; grid-template-columns: 0fr; margin-right: -7px; transition: grid-template-columns .3s var(--ease), margin .3s var(--ease); }
-.snd .slide > span { overflow: hidden; display: flex; align-items: center; gap: 7px; }
-.snd.expand .slide { grid-template-columns: 1fr; margin-right: 0; }
-.snd input {
-  appearance: none; width: 72px; height: 4px; margin: 0 2px; border-radius: 2px; cursor: pointer;
-  background: linear-gradient(var(--accent) 0 0) 0 / var(--v, 64%) 100% no-repeat, var(--track);
-}
-.snd input::-webkit-slider-thumb { appearance: none; width: 13px; height: 13px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 .5px #0000004d, 0 1px 2px #00000059; }
-.snd input::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 .5px #0000004d, 0 1px 2px #00000059; }
-.snd .pct { min-width: 4ch; text-align: right; }
 /* The night switch: a script widget with an icon and an action, as the app can draw one */
 .w.moon { padding: 0 9px; }
 .w.moon svg { width: 16px; height: 16px; }
@@ -443,6 +432,9 @@ main { position: relative; z-index: 1; overflow-x: clip; }
 }
 .ctx button { display: block; width: 100%; padding: 5px 10px; border-radius: 5px; text-align: left; }
 .ctx button:hover, .ctx button:focus-visible { background: var(--blue-fill); color: #fff; outline: none; }
+.ctx.choices button { padding-left: 24px; }
+.ctx [aria-checked="true"] { position: relative; }
+.ctx [aria-checked="true"]::before { content: "✓"; position: absolute; left: 9px; font-weight: 600; }
 .ctx hr { height: 1px; margin: 5px 10px; border: 0; background: color-mix(in srgb, var(--win-fg) 14%, transparent); }
 
 /* Popups and the More widgets menu */
@@ -489,11 +481,85 @@ main { position: relative; z-index: 1; overflow-x: clip; }
 .np-pop .ctrl button { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; }
 .np-pop .ctrl svg { width: 15px; height: 15px; }
 .np-pop .ctrl .play { width: 40px; height: 40px; background: var(--fg); color: var(--pop-bg); }
-.np-pop .play .resume, .paused .np-pop .play .pause { display: none; }
-.paused .np-pop .play .resume { display: block; }
+.pop .play .resume, .paused .pop .play .pause { display: none; }
+.paused .pop .play .resume { display: block; }
 .np-pop .vol { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .np-pop .vol input { flex: 1; accent-color: var(--fg); }
 .np-pop .vol svg { width: 13px; height: 13px; }
+/* System monitor, as the app's popup lays it out */
+.sys-pop { width: 340px; padding: 14px 16px 12px; }
+.sys-pop .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.sys-pop .cols > div { display: grid; gap: 8px; align-content: start; }
+.sys-pop .big { display: grid; gap: 6px; margin-bottom: 6px; }
+.sys-pop .big span { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; line-height: 13px; font-weight: 500; }
+.sys-pop .big svg { width: 12px; height: 12px; }
+.sys-pop .big b { font-size: 28px; line-height: 30px; font-weight: 600; }
+.sys-pop .graph { height: 34px; margin: 0; }
+.sys-pop .bar-m { height: 34px; display: grid; align-items: center; }
+.sys-pop .meter { height: 5px; border-radius: 3px; margin: 0; }
+.sys-pop .kv { margin: 0; font-size: 11px; line-height: 13px; }
+.sys-pop .kv span:first-child { color: var(--muted); }
+.sys-pop .sep { margin: 12px 0; }
+.sys-pop .apps { display: grid; gap: 9px; font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; }
+.sys-pop .apps p { display: grid; grid-template-columns: 18px 1fr 68px 38px 18px; align-items: center; gap: 8px; }
+.sys-pop .apps p > :nth-child(3), .sys-pop .apps p > :nth-child(4) { text-align: right; }
+.sys-pop .apps p > :nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sys-pop .apps .ai { width: 18px; height: 18px; }
+.sys-pop .apps svg { width: 14px; height: 14px; justify-self: center; opacity: .55; }
+.sys-pop .ah { color: var(--muted); font-size: 11px; }
+.sys-pop .ah b { grid-column: 1 / 3; font-weight: 600; }
+.sys-pop .ft { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; }
+.pop .lnk { display: flex; align-items: center; gap: 5px; color: var(--accent); font-size: 12px; font-weight: 500; }
+.pop .lnk svg { width: 12px; height: 12px; }
+/* Sound: cards like Control Center's, in the theme's colors, with filled sliders and round buttons */
+.snd-pop { --card-r: max(calc(var(--pop-radius) - 2px), 0px); width: 320px; padding: 10px; display: grid; gap: 10px; }
+.snd-pop .card { display: grid; gap: 10px; padding: 12px; border-radius: var(--card-r); background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.snd-pop .hd2, .snd-pop .lv { display: flex; align-items: center; gap: 8px; }
+.snd-pop .hd2 p { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.snd-pop b { font-size: 13px; line-height: 16px; font-weight: 600; }
+.snd-pop .dn, .snd-pop .out, .snd-pop .music p > span { color: var(--muted); font-size: 11px; line-height: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snd-pop .rb { --s: 28px; flex: none; display: grid; place-items: center; width: var(--s); height: var(--s); border-radius: min(var(--pop-radius), 50%); background: color-mix(in srgb, var(--fg) 10%, transparent); transition: background .15s; }
+.snd-pop .rb:hover { background: color-mix(in srgb, var(--fg) 18%, transparent); }
+.snd-pop .rb[aria-pressed="true"], .snd-pop .rb.on { background: var(--accent); color: var(--accent-text); }
+.snd-pop .rb svg { width: calc(var(--s) * .45); height: calc(var(--s) * .45); transition: rotate .25s var(--ease); }
+.snd-pop .chev[aria-expanded="true"] svg { rotate: 180deg; }
+.snd-pop .lvl { --h: 28px; position: relative; flex: 1; height: var(--h); border-radius: min(var(--pop-radius), calc(var(--h) / 2)); background: var(--track); overflow: hidden; }
+.snd-pop .lvl i { position: absolute; inset: 0 auto 0 0; width: calc(var(--h) + (100% - var(--h)) * var(--f, .5)); border-radius: inherit; background: var(--accent); }
+.snd-pop .lvl svg { position: absolute; left: calc(var(--h) * .27); top: 50%; translate: 0 -50%; width: calc(var(--h) * .46); height: calc(var(--h) * .46); color: var(--accent-text); pointer-events: none; }
+.snd-pop .lvl input { appearance: none; position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.snd-pop .lvl input::-webkit-slider-thumb { appearance: none; width: var(--h); height: var(--h); }
+.snd-pop .lvl input::-moz-range-thumb { width: var(--h); height: var(--h); border: 0; }
+.snd-pop .lvl:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.snd-pop .devs { display: grid; gap: 2px; margin-top: -2px; }
+.snd-pop .devs[hidden] { display: none; }
+.snd-pop .devs button { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: var(--card-r); font-size: 12px; line-height: 15px; text-align: left; }
+.snd-pop .devs button:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.snd-pop .devs svg { width: 13px; height: 13px; flex: none; }
+.snd-pop .devs .y, .snd-pop .devs [aria-pressed="true"] .n { display: none; }
+.snd-pop .devs [aria-pressed="true"] .y { display: block; color: var(--accent); }
+.snd-pop .devs .n { color: color-mix(in srgb, var(--fg) 35%, transparent); }
+.snd-pop .devs [aria-pressed="true"] { font-weight: 600; }
+.snd-pop .music { grid-template-columns: 44px 1fr 30px 30px 30px; align-items: center; gap: 2px; }
+.snd-pop .music .art { width: 44px; height: 44px; border-radius: min(var(--card-r), 8px); }
+.snd-pop .music p { display: grid; gap: 2px; min-width: 0; margin: 0 6px 0 12px; }
+.snd-pop .music b { display: flex; align-items: center; gap: 6px; }
+.snd-pop .eq { height: 10px; color: var(--accent); }
+.snd-pop .music button { display: grid; place-items: center; width: 30px; height: 30px; border-radius: min(var(--pop-radius), 15px); transition: background .15s; }
+.snd-pop .music button:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.snd-pop .music svg { width: 13px; height: 13px; }
+.snd-pop .music .play svg { width: 18px; height: 18px; }
+.snd-pop .apps { gap: 12px; }
+.snd-pop .app { display: grid; gap: 6px; }
+.snd-pop .app p { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 18px; font-weight: 500; }
+.snd-pop .app .out { margin-left: auto; padding-left: 4px; font-weight: 400; }
+.snd-pop .app .eq { height: 9px; }
+.snd-pop .app .ai { width: 18px; height: 18px; }
+.snd-pop .app .lvl { --h: 20px; }
+.snd-pop .app .rb { --s: 22px; }
+.snd-pop .app.muted .lvl i { width: var(--h); }
+.snd-pop .mi { display: grid; place-items: center; border-radius: 4.5px; color: #fff; background: linear-gradient(#fd5e78, #f9314f); }
+.snd-pop .mi svg { width: 11px; height: 11px; }
+.snd-pop > .lnk { padding: 0 6px 2px; }
 .menu button svg { width: 15px; height: 15px; flex: none; }
 .menu button.over-off { display: none; }
 
