@@ -648,6 +648,9 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         // A starter that becomes the preset's bar can trade a widget for another with the same ID.
         let kept = target.widgets.filter { widget in !starter.removed.contains(widget.id) || starter.added.contains { Self.id($0) == widget.id } }
         var order = kept.map(\.id)
+        // The preset's widgets the bar already has take the preset's order among themselves.
+        let retained = presetIDs.filter(order.contains)
+        for (slot, id) in zip(order.indices.filter { retained.contains(order[$0]) }, retained) { order[slot] = id }
         var appended = configuration.widgets.map(\.id).filter { !starter.removed.contains($0) } + starter.added.map(Self.id)
         /// Before the widget that follows `id` on the preset's bar, once that one is on the bar.
         func next(after id: String) -> Int? {
@@ -655,6 +658,14 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         }
         for set in widgetSets where set.state(in: target) != .conflict {
             if case let .store(id, _, position, _) = set {
+                // A Store widget turned off on the bar is turned on again where the preset has it, like a built-in one.
+                if set.state(in: target) == .disabled {
+                    edits.append(ConfigurationEdit(action: .unset, properties: [
+                        "widgetOverrides": .object([id: .object(["enabled": .null])])
+                    ]))
+                    edits.append(ConfigurationEdit(action: .set, id: id, properties: ["enabled": .bool(true), "position": .string(position.rawValue)]))
+                    continue
+                }
                 guard set.state(in: target) == .available, (packages + storeWidgets).contains(where: { $0.id == id }) else { continue }
                 edits.append(ConfigurationEdit(action: .set, id: id, properties: ["position": .string(position.rawValue)]))
                 // Without an order, a package's widgets come before the file's own.
@@ -671,6 +682,10 @@ struct SetupPreferences: Equatable, Codable, Sendable {
                             "widgetOverrides": .object([id: .object(["enabled": .null])])
                         ]))
                         edits.append(ConfigurationEdit(action: .set, id: id, properties: ["enabled": .bool(true)]))
+                    }
+                    // Minimal below the menu bar shows Workspaces as numbers only, on the bar's own Workspaces too.
+                    if let workspace = widget["workspace"] {
+                        edits.append(ConfigurationEdit(action: .set, id: id, properties: ["workspace": workspace]))
                     }
                     continue
                 }
