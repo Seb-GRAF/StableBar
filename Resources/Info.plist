@@ -16,6 +16,7 @@
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
+    <key>NSAudioCaptureUsageDescription</key><string>Play each app at its own volume and on its own output, from the Sound widget's mixer. StableBar keeps no recording of what it plays.</string>
     <key>NSAppleEventsUsageDescription</key><string>Hide the macOS menu bar when StableBar replaces it, read app status and run actions configured in your widgets.</string>
     <key>NSCalendarsFullAccessUsageDescription</key><string>Show your next meeting and today's agenda in calendar widgets.</string>
     <key>NSLocationUsageDescription</key><string>Show your Wi-Fi network's name in Wi-Fi widgets: macOS shares it only with apps allowed to use Location Services. StableBar never reads your location.</string>

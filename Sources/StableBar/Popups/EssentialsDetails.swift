@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum EssentialsPopup: String, Sendable {
-    case clock, battery, system, network, calendar, disk
+    case clock, battery, system, network, calendar, disk, audio
 
     static func kind(for widget: WidgetConfiguration, providerType: String?) -> Self? {
         if case .clock = widget.content { return .clock }
@@ -9,14 +9,19 @@ enum EssentialsPopup: String, Sendable {
     }
 
     func popup(timeZone: String?) -> PopupConfiguration {
-        PopupConfiguration(style: WidgetStyle(fontSize: 13, width: self == .system ? 360 : 320),
-                           layout: PopupBlock(content: .essentials(self, timeZone: timeZone)))
+        var popup = PopupConfiguration(style: WidgetStyle(fontSize: 13, width: self == .system ? 360 : self == .audio ? 340 : 320),
+                                       layout: PopupBlock(content: .essentials(self, timeZone: timeZone)))
+        // The Sound details' device lists open and close, and the popup grows and shrinks with them as a popup's views do.
+        if self == .audio { popup.animation = WidgetAnimation() }
+        return popup
     }
 }
 
 struct EssentialsDetails: View {
     let kind: EssentialsPopup
     let timeZone: String?
+    /// The popup's style, which the Sound details' sliders draw with.
+    let style: WidgetStyle
     let fields: [String: String]
     let context: BlockContext
     let appearance: WidgetAppearance
@@ -31,6 +36,7 @@ struct EssentialsDetails: View {
             case .network: network
             case .calendar: calendar
             case .disk: disk
+            case .audio: SoundDetails(style: style, fields: fields, context: context, appearance: appearance)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

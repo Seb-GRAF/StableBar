@@ -64,6 +64,8 @@ struct SceneFile: Decodable {
     var activeApp: String?
     /// The menu a popup scene shows in place of the widget's popup, as an app menu widget opens one.
     var menu: [MenuItem]?
+    /// The Sound details' mixer, as on a Mac where its apps play.
+    var mixer: Mixer?
     var draw: Draw
     /// The widget whose popup or Settings page to draw, or whose popup the bar shows open.
     var widget: String?
@@ -107,7 +109,7 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, packages, packageOrigins, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, group, view, section, tab, package, uninstall,
+        case configuration, packages, packageOrigins, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, mixer, draw, widget, group, view, section, tab, package, uninstall,
              themeLink, barLink, untickedWidgets, starRequest, setup, applicationMove, windowsUnderBar, shareScreen, sharePreset, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
@@ -149,6 +151,41 @@ struct SceneFile: Decodable {
                 case .couldntCheck: .couldntCheck("Couldn’t check just now. Check that your window manager is running, then try again.")
                 }
             }
+        }
+    }
+
+    /// Regular apps that talk to CoreAudio, each with its own choice and whether it plays, and the output devices, the
+    /// first being the default.
+    struct Mixer: Equatable {
+        struct App: Equatable {
+            var id: String
+            var name: String
+            var volume: Double?
+            var muted: Bool?
+            var output: String?
+            var playing: Bool?
+        }
+
+        struct Output: Equatable {
+            var uid: String
+            var name: String
+        }
+
+        var apps: [App]
+        var outputs: [Output]
+
+        /// The mixer's state with these apps running and System Audio Recording allowed.
+        var state: MixerState {
+            var state = MixerState(settings: Dictionary(uniqueKeysWithValues: apps.compactMap { app in
+                let setting = MixerState.Setting(volume: app.volume ?? 1, muted: app.muted ?? false, output: app.output)
+                return setting.isDefault ? nil : (app.id, setting)
+            }))
+            _ = state.handle(.outputsChanged(outputs.map { MixerState.Output(uid: $0.uid, name: $0.name) }, defaultOutput: outputs.first?.uid))
+            _ = state.handle(.processesChanged(apps.enumerated().map { MixerState.Client(object: UInt32($0.offset), bundleID: $0.element.id,
+                                                                                         name: $0.element.name, playing: $0.element.playing ?? false) },
+                                               apps: Dictionary(uniqueKeysWithValues: apps.map { ($0.id, $0.name) })))
+            _ = state.handle(.permissionChecked(.allowed))
+            return state
         }
     }
 
@@ -197,6 +234,7 @@ struct SceneFile: Decodable {
         focusedWindow = try values.decodeIfPresent(Int.self, forKey: .focusedWindow)
         activeApp = try values.decodeIfPresent(String.self, forKey: .activeApp)
         menu = try values.decodeIfPresent([MenuItem].self, forKey: .menu)
+        mixer = try values.decodeIfPresent(Mixer.self, forKey: .mixer)
         draw = try values.decode(Draw.self, forKey: .draw)
         widget = try values.decodeIfPresent(String.self, forKey: .widget)
         group = try values.decodeIfPresent(String.self, forKey: .group)
@@ -344,6 +382,46 @@ extension SceneFile.Setup: Decodable {
         inApplications = try values.decodeIfPresent(Bool.self, forKey: .inApplications) ?? true
         workspaceCheck = try values.decodeIfPresent(WorkspaceCheck.self, forKey: .workspaceCheck)
         suggested = try values.decodeIfPresent([PackageIndex.Entry].self, forKey: .suggested) ?? []
+    }
+}
+
+extension SceneFile.Mixer: Decodable {
+    enum CodingKeys: String, CodingKey, CaseIterable { case apps, outputs }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        apps = try values.decode([App].self, forKey: .apps)
+        outputs = try values.decode([Output].self, forKey: .outputs)
+        if Set(apps.map(\.id)).count != apps.count {
+            throw DecodingError.dataCorruptedError(forKey: .apps, in: values, debugDescription: "The mixer names each app once.")
+        }
+    }
+}
+
+extension SceneFile.Mixer.App: Decodable {
+    enum CodingKeys: String, CodingKey, CaseIterable { case id, name, volume, muted, output, playing }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        name = try values.decode(String.self, forKey: .name)
+        volume = try values.decodeIfPresent(Double.self, forKey: .volume)
+        muted = try values.decodeIfPresent(Bool.self, forKey: .muted)
+        output = try values.decodeIfPresent(String.self, forKey: .output)
+        playing = try values.decodeIfPresent(Bool.self, forKey: .playing)
+    }
+}
+
+extension SceneFile.Mixer.Output: Decodable {
+    enum CodingKeys: String, CodingKey, CaseIterable { case uid, name }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        uid = try values.decode(String.self, forKey: .uid)
+        name = try values.decode(String.self, forKey: .name)
     }
 }
 

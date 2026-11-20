@@ -162,6 +162,7 @@ struct PopupBlock: Decodable, Sendable {
     let openMenuBarItem: MenuBarItemReference?
     let selectInputSourceField: String?
     let selectOutputDeviceField: String?
+    let selectInputDeviceField: String?
     /// The name of one of its popup's `views`, which a click shows in place of the popup's layout.
     let view: String?
     let hideWhenEmpty: String?
@@ -198,7 +199,7 @@ struct PopupBlock: Decodable, Sendable {
         case type, role, style, alignment, children, text, field, height, source, row, orientation, title, onClick
         case path, fit, tinted, name, animation, styleSource, styleField, onClickField, lineWidth
         case hideWhenEmpty, showWhen, hideWhen, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField
-        case openMenuBarItem, selectInputSourceField, selectOutputDeviceField, view, transition
+        case openMenuBarItem, selectInputSourceField, selectOutputDeviceField, selectInputDeviceField, view, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
         case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon, gap, segments, set
     }
@@ -220,6 +221,7 @@ struct PopupBlock: Decodable, Sendable {
         openMenuBarItem = nil
         selectInputSourceField = nil
         selectOutputDeviceField = nil
+        selectInputDeviceField = nil
         view = nil
         self.hideWhenEmpty = hideWhenEmpty
         showWhen = nil
@@ -272,10 +274,15 @@ struct PopupBlock: Decodable, Sendable {
             || selectInputSourceField != nil {
             throw DecodingError.dataCorruptedError(forKey: .selectOutputDeviceField, in: values, debugDescription: "A block cannot combine selectOutputDeviceField with onClick, onClickField, open, openField, quitField, openMenuBarItem or selectInputSourceField.")
         }
+        selectInputDeviceField = try values.decodeIfPresent(String.self, forKey: .selectInputDeviceField)
+        if selectInputDeviceField != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil
+            || selectInputSourceField != nil || selectOutputDeviceField != nil {
+            throw DecodingError.dataCorruptedError(forKey: .selectInputDeviceField, in: values, debugDescription: "A block cannot combine selectInputDeviceField with onClick, onClickField, open, openField, quitField, openMenuBarItem, selectInputSourceField or selectOutputDeviceField.")
+        }
         view = try values.decodeIfPresent(String.self, forKey: .view)
         if view != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil
-            || selectInputSourceField != nil || selectOutputDeviceField != nil {
-            throw DecodingError.dataCorruptedError(forKey: .view, in: values, debugDescription: "A block cannot combine view with onClick, onClickField, open, openField, quitField, openMenuBarItem, selectInputSourceField or selectOutputDeviceField.")
+            || selectInputSourceField != nil || selectOutputDeviceField != nil || selectInputDeviceField != nil {
+            throw DecodingError.dataCorruptedError(forKey: .view, in: values, debugDescription: "A block cannot combine view with onClick, onClickField, open, openField, quitField, openMenuBarItem, selectInputSourceField, selectOutputDeviceField or selectInputDeviceField.")
         }
         hideWhenEmpty = try values.decodeIfPresent(String.self, forKey: .hideWhenEmpty)
         showWhen = try Self.conditions(in: values, forKey: .showWhen)
@@ -304,7 +311,7 @@ struct PopupBlock: Decodable, Sendable {
                 throw DecodingError.dataCorruptedError(forKey: .set, in: values, debugDescription: "A control cannot combine set with onChange.")
             }
             guard settings.contains(setting) else {
-                throw DecodingError.dataCorruptedError(forKey: .set, in: values, debugDescription: "A slider can set volume, and a toggle muted or wifiPower.")
+                throw DecodingError.dataCorruptedError(forKey: .set, in: values, debugDescription: "A slider can set volume or inputVolume, and a toggle muted, inputMuted or wifiPower.")
             }
             return .set(setting)
         }
@@ -344,7 +351,7 @@ struct PopupBlock: Decodable, Sendable {
             sliderIcon = icon
             let title = try values.decode(String.self, forKey: .title)
             let source = try values.decode(String.self, forKey: .source)
-            let action = try controlAction([.volume])
+            let action = try controlAction([.volume, .inputVolume])
             content = filled == true
                 ? .filledSlider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop,
                                 icon: icon, action: action)
@@ -352,7 +359,7 @@ struct PopupBlock: Decodable, Sendable {
         case "toggle":
             content = .toggle(title: try values.decode(String.self, forKey: .title),
                               source: try values.decode(String.self, forKey: .source),
-                              action: try controlAction([.muted, .wifiPower]))
+                              action: try controlAction([.muted, .inputMuted, .wifiPower]))
         case "segmented":
             let options = try values.decode([PopupControlOption].self, forKey: .options)
             guard !options.isEmpty, Set(options.map(\.value)).count == options.count else {

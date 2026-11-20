@@ -211,7 +211,7 @@ jobs:
           path: .build
           key: ${{ steps.cache.outputs.cache-primary-key }}
       - name: Archive release binary
-        run: tar -cf release-build.tar -C .build/release StableBar Sparkle.framework -C "$GITHUB_WORKSPACE/.build/artifacts/sparkle/Sparkle" bin
+        run: tar -cf release-build.tar -C .build/release StableBar Sparkle.framework libStableBarNowPlaying.dylib -C "$GITHUB_WORKSPACE/.build/artifacts/sparkle/Sparkle" bin
       - uses: actions/upload-artifact@v7
         with:
           name: release-build

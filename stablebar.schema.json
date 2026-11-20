@@ -1142,6 +1142,9 @@
         "selectOutputDeviceField": {
           "$ref": "#/definitions/string"
         },
+        "selectInputDeviceField": {
+          "$ref": "#/definitions/string"
+        },
         "openMenuBarItem": {
           "$ref": "#/definitions/menuBarItem"
         },
@@ -1196,6 +1199,8 @@
               "enum": [
                 "volume",
                 "muted",
+                "inputVolume",
+                "inputMuted",
                 "wifiPower"
               ]
             },
@@ -1206,7 +1211,7 @@
               "type": "null"
             }
           ],
-          "description": "In place of onChange, what a slider or toggle changes without a command: volume for a slider, muted or wifiPower for a toggle."
+          "description": "In place of onChange, what a slider or toggle changes without a command: volume or inputVolume for a slider, muted, inputMuted or wifiPower for a toggle."
         },
         "endStop": {
           "$ref": "#/definitions/sliderEndStop",
@@ -1605,6 +1610,7 @@
                 "audio",
                 "inputSource",
                 "microphone",
+                "nowPlaying",
                 "privacy",
                 "calendar"
               ]
@@ -1978,6 +1984,7 @@
                 "audio",
                 "inputSource",
                 "microphone",
+                "nowPlaying",
                 "privacy",
                 "calendar",
                 "merge"
@@ -2176,6 +2183,7 @@
                 "audio",
                 "inputSource",
                 "microphone",
+                "nowPlaying",
                 "privacy",
                 "calendar"
               ]

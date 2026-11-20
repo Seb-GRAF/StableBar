@@ -253,49 +253,50 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         systemListener = nil
     }
 
-    /// Sets the default output device's volume to `volume`, 0–1, keeping its balance, and unmutes it
-    /// for a volume above zero, as the Sound menu's slider does.
-    static func setVolume(_ volume: Double) throws {
-        let device = try defaultDevice(input: false)
+    /// Sets the default output device's volume, or with `input` the default input device's, to `volume`, 0–1, keeping
+    /// its balance, and unmutes it for a volume above zero, as the Sound menu's slider does.
+    static func setVolume(_ volume: Double, input: Bool = false) throws {
+        let device = try defaultDevice(input: input)
+        let scope = input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput
         var address = AudioObjectPropertyAddress(mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
-                                                 mScope: kAudioDevicePropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
+                                                 mScope: scope, mElement: kAudioObjectPropertyElementMain)
         guard device != kAudioObjectUnknown, AudioObjectHasProperty(device, &address) else {
-            throw CommandFailure(message: "The audio output has no volume control.")
+            throw CommandFailure(message: "The audio \(input ? "input" : "output") has no volume control.")
         }
         var value = Float32(min(max(volume, 0), 1))
         let status = AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value)
         guard status == noErr else { throw CommandFailure(message: "Could not set the volume (\(status)).") }
-        var mute = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: kAudioDevicePropertyScopeOutput,
-                                              mElement: kAudioObjectPropertyElementMain)
+        var mute = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: scope, mElement: kAudioObjectPropertyElementMain)
         if value > 0, AudioObjectHasProperty(device, &mute) {
             var unmuted: UInt32 = 0
             AudioObjectSetPropertyData(device, &mute, 0, nil, UInt32(MemoryLayout<UInt32>.size), &unmuted)
         }
     }
 
-    /// Mutes or unmutes the default output device.
-    static func setMuted(_ muted: Bool) throws {
-        let device = try defaultDevice(input: false)
-        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: kAudioDevicePropertyScopeOutput,
+    /// Mutes or unmutes the default output device, or with `input` the default input device.
+    static func setMuted(_ muted: Bool, input: Bool = false) throws {
+        let device = try defaultDevice(input: input)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute,
+                                                 mScope: input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput,
                                                  mElement: kAudioObjectPropertyElementMain)
         guard device != kAudioObjectUnknown, AudioObjectHasProperty(device, &address) else {
-            throw CommandFailure(message: "The audio output can't be muted.")
+            throw CommandFailure(message: "The audio \(input ? "input" : "output") can't be muted.")
         }
         var value: UInt32 = muted ? 1 : 0
         let status = AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<UInt32>.size), &value)
         guard status == noErr else { throw CommandFailure(message: "Could not set the mute state (\(status)).") }
     }
 
-    /// Makes the device with `id` the default output device.
-    static func setOutputDevice(_ id: String) throws {
+    /// Makes the device with `id` the default output device, or with `input` the default input device.
+    static func setDefaultDevice(_ id: String, input: Bool) throws {
         guard var device = AudioDeviceID(id) else { throw CommandFailure(message: "\(id) isn't an audio device ID.") }
-        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        var address = AudioObjectPropertyAddress(mSelector: input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultOutputDevice,
                                                  mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         let status = AudioObjectSetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, UInt32(MemoryLayout<AudioDeviceID>.size), &device)
-        guard status == noErr else { throw CommandFailure(message: "Could not switch the audio output (\(status)).") }
+        guard status == noErr else { throw CommandFailure(message: "Could not switch the audio \(input ? "input" : "output") (\(status)).") }
     }
 
-    private static func defaultDevice(input: Bool) throws -> AudioDeviceID {
+    static func defaultDevice(input: Bool) throws -> AudioDeviceID {
         var address = AudioObjectPropertyAddress(mSelector: input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultOutputDevice,
                                                  mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         var device = AudioDeviceID(0)
@@ -314,7 +315,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         }
     }
 
-    private static func flag(of object: AudioObjectID, at address: AudioObjectPropertyAddress) -> Bool {
+    static func flag(of object: AudioObjectID, at address: AudioObjectPropertyAddress) -> Bool {
         var address = address
         var value: UInt32 = 0
         var size = UInt32(MemoryLayout<UInt32>.size)
@@ -322,7 +323,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
     }
 
     /// The objects that `object` lists at `address`, none when it can't tell.
-    private static func objects(of object: AudioObjectID, at address: AudioObjectPropertyAddress) -> [AudioObjectID] {
+    static func objects(of object: AudioObjectID, at address: AudioObjectPropertyAddress) -> [AudioObjectID] {
         var address = address
         var size: UInt32 = 0
         guard AudioObjectGetPropertyDataSize(object, &address, 0, nil, &size) == noErr else { return [] }
@@ -331,7 +332,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         return Array(objects.prefix(Int(size) / MemoryLayout<AudioObjectID>.size))
     }
 
-    private static func name(of device: AudioDeviceID) throws -> String {
+    static func name(of device: AudioDeviceID) throws -> String {
         var address = AudioObjectPropertyAddress(mSelector: kAudioObjectPropertyName,
                                                 mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         var name: Unmanaged<CFString>?
@@ -361,7 +362,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         }
     }
 
-    private static func hasStreams(_ device: AudioDeviceID, scope: AudioObjectPropertyScope) -> Bool {
+    static func hasStreams(_ device: AudioDeviceID, scope: AudioObjectPropertyScope) -> Bool {
         var streams = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreams, mScope: scope, mElement: kAudioObjectPropertyElementMain)
         var size: UInt32 = 0
         return AudioObjectGetPropertyDataSize(device, &streams, 0, nil, &size) == noErr && size > 0

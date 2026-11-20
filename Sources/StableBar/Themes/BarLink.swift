@@ -41,7 +41,7 @@ struct BarLink: Equatable, Sendable {
     /// A popup block with one of these runs a command, opens something or changes a setting, so it stays behind.
     private static let blockActions: Set<String> = [
         "onClick", "onClickField", "open", "openField", "quitField", "openMenuBarItem", "selectInputSourceField",
-        "selectOutputDeviceField", "onChange", "onSubmit", "onStop", "onStar", "set"
+        "selectOutputDeviceField", "selectInputDeviceField", "onChange", "onSubmit", "onStop", "onStar", "set"
     ]
 
     init(theme: ThemeLink) {

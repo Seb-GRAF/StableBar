@@ -31,9 +31,25 @@ final class AppWatcher: NSObject {
             self, selector: #selector(refreshAppMenu), name: Notification.Name("com.apple.screenIsUnlocked"), object: nil)
     }
 
+    /// The app macOS shows its permission prompts from, such as the one for System Audio Recording.
+    static let permissionPrompts = "com.apple.UserNotificationCenter"
+
+    /// The active app while a permission prompt is in front of it.
+    private var behindPrompt: NSRunningApplication?
+
     @objc private func updateActiveApp() {
         guard let store else { return }
-        activeApp = NSWorkspace.shared.frontmostApplication
+        let front = NSWorkspace.shared.frontmostApplication
+        // A permission prompt in front of the app, and the app coming back after it, leave the active app and an open
+        // popup as they were, such as the Sound details that asked for the permission.
+        if front?.bundleIdentifier == Self.permissionPrompts {
+            behindPrompt = activeApp
+            return
+        }
+        let returning = behindPrompt != nil && front == behindPrompt
+        behindPrompt = nil
+        activeApp = front
+        guard !returning else { return }
         if let screen = NSScreen.main { activeDisplayID = BarDisplay(screen: screen).id }
         store.popup.close()
         store.configurationStore.refreshContext()

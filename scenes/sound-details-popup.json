@@ -1,0 +1,55 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      { "id": "sound", "type": "audio", "position": "right", "details": true }
+    ]
+  },
+  "outputs": {
+    "audio": {
+      "text": "45%",
+      "icon": "speaker.wave.2",
+      "value": 0.45,
+      "fields": { "device": "MacBook Pro Speakers", "deviceID": "42", "volumeAvailable": "true", "volume": "45", "muted": "false" },
+      "values": { "volume": 0.45 },
+      "lists": {
+        "devices": [
+          { "id": "42", "name": "MacBook Pro Speakers", "selected": "true" },
+          { "id": "77", "name": "AirPods Pro", "selected": "" },
+          { "id": "9", "name": "LG HDR 4K", "selected": "" }
+        ]
+      }
+    },
+    "microphone": {
+      "text": "70%",
+      "icon": "mic",
+      "value": 0.7,
+      "fields": { "device": "MacBook Pro Microphone", "deviceID": "43", "volumeAvailable": "true", "volume": "70", "muted": "false", "inUse": "false" },
+      "values": { "volume": 0.7 },
+      "lists": {
+        "devices": [
+          { "id": "43", "name": "MacBook Pro Microphone", "selected": "true" },
+          { "id": "78", "name": "AirPods Pro", "selected": "" }
+        ]
+      }
+    },
+    "nowPlaying": {
+      "text": "Teardrop",
+      "fields": { "title": "Teardrop", "artist": "Massive Attack", "album": "Mezzanine", "playing": "1", "app": "com.apple.Music" }
+    }
+  },
+  "mixer": {
+    "apps": [
+      { "id": "com.apple.Music", "name": "Music", "volume": 0.6, "playing": true },
+      { "id": "com.apple.Safari", "name": "Safari", "muted": true },
+      { "id": "com.apple.podcasts", "name": "Podcasts", "output": "airpods" }
+    ],
+    "outputs": [
+      { "uid": "speakers", "name": "MacBook Pro Speakers" },
+      { "uid": "airpods", "name": "AirPods Pro" }
+    ]
+  },
+  "draw": "popup",
+  "widget": "sound",
+  "height": 640
+}

@@ -299,6 +299,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         store.configurationStore.prepareScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
         applicationMoveResume.load(for: store)
         MenuBarAutoHide.forgetIfShown()
+        if !AudioMixer.shared.state.settings.isEmpty { AudioMixer.shared.start() }
         endMenuBarReveals()
         NSApp.mainMenu = EditMenu.make()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
