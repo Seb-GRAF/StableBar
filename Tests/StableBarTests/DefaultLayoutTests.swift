@@ -532,7 +532,7 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
     let configuration = try #require(store.configuration)
     let style = tooltipStyle(defaults: WidgetStyle(), widget: WidgetStyle())
     let appearance = WidgetAppearance(style, defaults: WidgetStyle())
-    // Padded and backgrounded inside `TooltipWidth`, as a widget's tooltip draws its hover controls.
+    // Padded inside `TooltipWidth` and backgrounded around it, as a widget's tooltip draws its hover controls.
     let host = NSHostingView(rootView: TooltipWidth(maxWidth: TooltipWidth.widgetMaxWidth) {
         HoverControls(widget: configuration.widgets[0], store: store,
                       style: LayoutStyle(inherited: style, states: StyleStates(), tracksHover: true), runAction: { _, _ in })
