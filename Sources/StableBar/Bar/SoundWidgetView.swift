@@ -64,6 +64,7 @@ struct VolumeSlider: View {
     let store: BarStore
     let style: LayoutStyle
     let width: CGFloat
+    /// Beside the icon on the bar; otherwise in a tooltip under the widget.
     var inline = false
     /// The slider's value while it is dragged, ahead of the volume the source reads back.
     @State private var level: Double?
@@ -83,6 +84,7 @@ struct VolumeSlider: View {
                     PopupBlockView(block: Self.slider, inheritedStyle: style.inherited, fields: [:],
                                    context: BlockContext(values: ["volume": shown], roles: roles,
                                                          inlineControlHeight: inline ? style.inherited.inlineControlHeight : nil,
+                                                         tooltipLineHeight: inline ? nil : style.inherited.lineHeight,
                                                          continuousSliders: true, fillsWidth: false, open: { _ in },
                                                          states: style.states, tracksHover: style.tracksHover,
                                                          runAction: { _, values in

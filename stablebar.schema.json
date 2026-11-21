@@ -1239,7 +1239,7 @@
         },
         "filled": {
           "$ref": "#/definitions/boolean",
-          "description": "For sliders: true draws a filled bar in the block's own style; false keeps macOS's slider. Omit to follow a nonempty slider role, unless another role is assigned. The background is the track and accent is the fill. Automatically themed sliders fit the widget's content height inline; popups and tooltips default to 28 points. An endStop follows a notch and fills the whole bar."
+          "description": "For sliders: true draws a filled bar in the block's own style; false keeps macOS's slider. Omit to follow a nonempty slider role, unless another role is assigned. The background is the track and accent is the fill. Automatically themed sliders fit the widget's content height inline and a line of text in hover tooltips; popups default to 28 points. An endStop follows a notch and fills the whole bar."
         },
         "icon": {
           "$ref": "#/definitions/string",

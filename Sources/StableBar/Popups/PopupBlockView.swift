@@ -14,6 +14,9 @@ struct BlockContext {
     /// The tallest a themed slider can be: in the bar, the widget's content area, and anywhere, the height of a block
     /// around it. Nil in popups and tooltips outside a block with a height.
     var inlineControlHeight: Double?
+    /// In a hover tooltip, a line of its text: the tallest a themed slider can be there, whatever blocks hold it, since
+    /// the role's height is meant for popups.
+    var tooltipLineHeight: Double?
     var continuousSliders = false
     /// Popup layouts fill their width; bar layouts take their content's width.
     var fillsWidth = true
@@ -267,8 +270,8 @@ struct PopupBlockView: View {
 
     private func resolvedStyle(states: StyleStates) -> BlockStyle {
         let style = block.resolvedStyle(inherited: inheritedStyle, styles: context.styles, fields: fields, states: states, roles: context.roles)
-        return block.automaticallyFillsSlider(roles: context.roles)
-            ? style.limitingSliderHeight(to: context.inlineControlHeight) : style
+        let limit = [context.inlineControlHeight, context.tooltipLineHeight].compactMap(\.self).min()
+        return block.automaticallyFillsSlider(roles: context.roles) ? style.limitingSliderHeight(to: limit) : style
     }
 
     private func fieldText(_ text: String) -> Text {

@@ -550,17 +550,46 @@ enum SceneRenderer {
         }
     }
 
-    /// The bar on the edge it sits on, with the popup of the widget `id` open under it, or above it at the bottom.
+    /// The bar on the edge it sits on, with the popup of the widget `id` open under it, or above it at the bottom. A
+    /// widget without a popup shows its hover controls in their tooltip instead.
     private static func barWithPopup(of id: String, store: BarStore) throws -> some View {
         let configuration = store.configuration!
         let look = configuration.look(on: .monitor)
         guard let widget = look.widgets.first(where: { $0.id == id }) else {
             throw CommandFailure(message: "widget: The configuration has no widget \(id).")
         }
-        guard let popup = widgetPopup(widget, store: store) else { throw CommandFailure(message: "widget: \(id) has no popup.") }
+        let defaults = look.popupDefaults.popupStyle(over: look.defaults)
+        let open: AnyView
+        let gap: Double
+        if let popup = widgetPopup(widget, store: store) {
+            open = AnyView(PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: defaults), store: store, widget: widget)
+                .frame(width: CGFloat(popup.style.width ?? 360))
+                .fixedSize(horizontal: false, vertical: true))
+            gap = popup.gap(below: look.bar)
+        } else if widget.hoverLayout != nil
+                    || widget.layout == nil && configuration.providerType(of: widget) == DataSourceType.audio.name
+                    && store.widgetScripts.scripts[id]?.output.values?["volume"] != nil {
+            let style = tooltipStyle(defaults: defaults, widget: widget.tooltipStyle,
+                                     states: StyleStates(mode: store.barPresentation.modePresentation(on: .monitor)))
+            let appearance = WidgetAppearance(style, defaults: WidgetStyle())
+            let shadowInset = CGFloat(appearance.shadowRadius * 2 + 2)
+            let states = store.barPresentation.presentations[id]?.style(on: .monitor).blockStates(open: false) ?? StyleStates()
+            open = AnyView(TooltipWidth(maxWidth: TooltipWidth.widgetMaxWidth - shadowInset * 2) {
+                    HoverControls(widget: widget, store: store, style: LayoutStyle(inherited: style, states: states, tracksHover: true),
+                                  runAction: { _, _ in })
+                        .font(appearance.font)
+                        .foregroundStyle(appearance.foreground)
+                        .padding(.horizontal, appearance.paddingHorizontal)
+                        .padding(.vertical, appearance.paddingVertical)
+                }
+                .modifier(PopupBackground(style: style, glass: look.bar.glass, backgrounds: PopupBackgrounds()))
+                .fixedSize())
+            gap = look.bar.popupGap(inPopup: false)
+        } else {
+            throw CommandFailure(message: "widget: \(id) has no popup or hover controls.")
+        }
         let geometry = configuration.barGeometry(for: display)
         let upward = look.bar.position == .bottom
-        let gap = popup.gap(below: look.bar)
         let edge = upward ? geometry.panelHeight - geometry.drawingBottom - gap : geometry.drawingBottom + gap
         return BarView(store: store, display: display)
             .environment(\.screenKind, .monitor)
@@ -568,11 +597,8 @@ enum SceneRenderer {
             .overlayPreferenceValue(BarAnchorPreference.self) { anchors in
                 GeometryReader { proxy in
                     if let anchor = anchors.widgets[id] {
-                        PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults)),
-                                  store: store, widget: widget)
+                        open
                             .environment(\.screenKind, .monitor)
-                            .frame(width: CGFloat(popup.style.width ?? 360))
-                            .fixedSize(horizontal: false, vertical: true)
                             .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
                             .frame(width: 0, height: 0, alignment: upward ? .bottom : .top)
                             .offset(x: proxy[anchor.bounds].midX, y: edge)

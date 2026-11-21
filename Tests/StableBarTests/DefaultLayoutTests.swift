@@ -504,6 +504,47 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
     #expect(WidgetPosition.allCases.filter(SoundWidgetView.opensBeforeIcon) == [.right], "Only the right of the bar grows to the left")
 }
 
+@Test @MainActor func themedSlidersInHoverTooltipsKeepToALineOfTheTooltipsText() throws {
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
+    store.configuration = try decode(Configuration.self, #"""
+    {"roles":{"slider":{"cornerRadius":20,"height":40}},"widgets":[{"id":"sound","type":"audio","position":"right"},
+     {"id":"timer","type":"text","text":"60m","position":"right",
+      "hoverLayout":{"type":"row","style":{"paddingVertical":4},"children":[{"type":"slider","title":"Minutes","source":"duration",
+                     "min":15,"max":240,"step":15,"onChange":"set-duration","style":{"width":100}}]}}]}
+    """#)
+    let script = ScriptWidget()
+    script.output = try ScriptOutput.read(Data(#"{"text":"62%","icon":"speaker.wave.2","values":{"volume":0.62}}"#.utf8))
+    store.widgetScripts.scripts["sound"] = script
+    let widgets = try #require(store.configuration?.widgets)
+    // The tooltip's style as WidgetView hands it to the hover controls, with the bar's widget height in it.
+    let tooltip = tooltipStyle(defaults: WidgetStyle(height: 28), widget: WidgetStyle())
+    let style = LayoutStyle(inherited: tooltip, states: StyleStates(), tracksHover: true)
+    let line = Int(tooltip.lineHeight) * 2
+    #expect(try draw(HoverControls(widget: widgets[0], store: store, style: style, runAction: { _, _ in })).height == line)
+    let timer = try draw(HoverControls(widget: widgets[1], store: store, style: style, runAction: { _, _ in }))
+    #expect(timer.height == line + 16, "The row's padding goes around the slider instead of squeezing it")
+}
+
+@Test @MainActor func aTooltipWhoseControlsDrawNothingTakesNoRoom() throws {
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
+    store.configuration = try decode(Configuration.self, #"{"widgets":[{"id":"sound","type":"audio","position":"right"}]}"#)
+    // Without a volume, as once its source stops, the volume slider draws nothing.
+    let configuration = try #require(store.configuration)
+    let style = tooltipStyle(defaults: WidgetStyle(), widget: WidgetStyle())
+    let appearance = WidgetAppearance(style, defaults: WidgetStyle())
+    // Padded inside `TooltipWidth` and backgrounded around it, as a widget's tooltip draws its hover controls.
+    let host = NSHostingView(rootView: TooltipWidth(maxWidth: TooltipWidth.widgetMaxWidth) {
+        HoverControls(widget: configuration.widgets[0], store: store,
+                      style: LayoutStyle(inherited: style, states: StyleStates(), tracksHover: true), runAction: { _, _ in })
+            .font(appearance.font)
+            .padding(.horizontal, appearance.paddingHorizontal)
+            .padding(.vertical, appearance.paddingVertical)
+    }
+    .modifier(PopupBackground(style: style, glass: configuration.bar.glass, backgrounds: PopupBackgrounds())))
+    #expect(appearance.paddingVertical > 0)
+    #expect(host.fittingSize == .zero)
+}
+
 @Test(arguments: [true, false]) @MainActor
 func hoverExpansionKeepsControlsOutsideTheLabelThroughoutTheAnimation(controlsBefore: Bool) throws {
     for expansion in stride(from: 0.0, through: 1.0, by: 0.1) {

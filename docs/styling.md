@@ -92,8 +92,9 @@ role other than `slider` also keeps the native control when `filled` is omitted.
 
 This applies to popup sliders, hover layouts and Sound's built-in hover control. Automatically
 styled sliders fit the widget's content height inline, or a line of text when it has no fixed
-height. Popups and hover tooltips use the role's height, 28 points by default. Existing explicit
-filled sliders keep their configured sizing.
+height. Popups use the role's height, 28 points by default, and hover tooltips keep to a line
+of their text, like macOS's slider there. Existing explicit filled sliders keep their configured
+sizing.
 
 [Themed sliders](../examples/themed-sliders.json) styles Sound's popup and built-in hover control
 without adding `filled` or an explicit role to either slider.
