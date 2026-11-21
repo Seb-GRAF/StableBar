@@ -1,0 +1,22 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "roles": {"slider": {"height": 40, "cornerRadius": 20, "background": "@token.surfaceRaised", "accent": "@token.accent"}},
+    "widgets": [
+      {
+        "id": "timer",
+        "type": "script",
+        "command": "true",
+        "position": "center",
+        "hoverLayout": {"type": "slider", "title": "Minutes", "source": "duration", "min": 15, "max": 240, "step": 15, "onChange": "true", "style": {"width": 120}}
+      }
+    ]
+  },
+  "outputs": {
+    "timer": {"text": "Timer", "values": {"duration": 60}}
+  },
+  "draw": "bar",
+  "widget": "timer",
+  "width": 480,
+  "height": 140
+}
