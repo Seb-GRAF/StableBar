@@ -896,8 +896,8 @@ struct SetupTourView: View {
             session.finish()
             // A permission taken back since Finish setup sends the tour back to its row.
             if !session.missingPermissions.isEmpty { withAnimation(motion.stageAnimation) { session.step = .allow } }
-            guard session.finished, session.error == nil, session.loginStatus != .requiresApproval else { return }
         }
+        guard session.finished, session.error == nil, session.loginStatus != .requiresApproval else { return }
         close()
         next?()
     }

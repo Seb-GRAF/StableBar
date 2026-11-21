@@ -402,11 +402,13 @@ final class SetupSession {
 
     /// Shows the review of one of the chosen preset's Store widgets, as Found on your Mac does.
     func review(_ widget: (entry: PackageIndex.Entry, settings: [String: String])) async {
-        guard downloading == nil else { return }
+        guard downloading == nil, !finished else { return }
         downloading = widget.entry.key
         defer { downloading = nil }
         do {
             let inspection = try await store.packageStoreClient.packageForAdding(widget.entry)
+            // The bar is saved once setup finishes, so a review that comes back later would add nothing.
+            guard !finished else { return }
             // Settings saved for the package earlier win over the preset's.
             let saved = try WidgetSetup(store: store).savedSettings(for: inspection.manifest)
             reviewedStoreWidget = widget.entry.id
