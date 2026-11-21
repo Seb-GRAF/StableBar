@@ -525,6 +525,18 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
     #expect(timer.height == line + 16, "The row's padding goes around the slider instead of squeezing it")
 }
 
+@Test @MainActor func aTooltipWhoseControlsDrawNothingTakesNoRoom() throws {
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
+    store.configuration = try decode(Configuration.self, #"{"widgets":[{"id":"sound","type":"audio","position":"right"}]}"#)
+    // Without a volume, as once its source stops, the volume slider draws nothing.
+    let widget = try #require(store.configuration?.widgets.first)
+    let style = LayoutStyle(inherited: tooltipStyle(defaults: WidgetStyle(), widget: WidgetStyle()), states: StyleStates(), tracksHover: true)
+    let host = NSHostingView(rootView: TooltipWidth(maxWidth: TooltipWidth.widgetMaxWidth) {
+        HoverControls(widget: widget, store: store, style: style, runAction: { _, _ in })
+    })
+    #expect(host.fittingSize == .zero)
+}
+
 @Test(arguments: [true, false]) @MainActor
 func hoverExpansionKeepsControlsOutsideTheLabelThroughoutTheAnimation(controlsBefore: Bool) throws {
     for expansion in stride(from: 0.0, through: 1.0, by: 0.1) {

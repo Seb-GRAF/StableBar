@@ -8,13 +8,15 @@ struct TooltipWidth: Layout {
 
     let maxWidth: CGFloat
 
+    // The content can draw nothing, such as the volume slider once its output has no volume.
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = min(subviews[0].sizeThatFits(.unspecified).width, maxWidth)
-        return subviews[0].sizeThatFits(ProposedViewSize(width: width, height: nil))
+        guard let content = subviews.first else { return .zero }
+        let width = min(content.sizeThatFits(.unspecified).width, maxWidth)
+        return content.sizeThatFits(ProposedViewSize(width: width, height: nil))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
 
