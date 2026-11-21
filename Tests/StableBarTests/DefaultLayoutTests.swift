@@ -529,11 +529,19 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
     store.configuration = try decode(Configuration.self, #"{"widgets":[{"id":"sound","type":"audio","position":"right"}]}"#)
     // Without a volume, as once its source stops, the volume slider draws nothing.
-    let widget = try #require(store.configuration?.widgets.first)
-    let style = LayoutStyle(inherited: tooltipStyle(defaults: WidgetStyle(), widget: WidgetStyle()), states: StyleStates(), tracksHover: true)
+    let configuration = try #require(store.configuration)
+    let style = tooltipStyle(defaults: WidgetStyle(), widget: WidgetStyle())
+    let appearance = WidgetAppearance(style, defaults: WidgetStyle())
+    // Padded and backgrounded inside `TooltipWidth`, as a widget's tooltip draws its hover controls.
     let host = NSHostingView(rootView: TooltipWidth(maxWidth: TooltipWidth.widgetMaxWidth) {
-        HoverControls(widget: widget, store: store, style: style, runAction: { _, _ in })
-    })
+        HoverControls(widget: configuration.widgets[0], store: store,
+                      style: LayoutStyle(inherited: style, states: StyleStates(), tracksHover: true), runAction: { _, _ in })
+            .font(appearance.font)
+            .padding(.horizontal, appearance.paddingHorizontal)
+            .padding(.vertical, appearance.paddingVertical)
+    }
+    .modifier(PopupBackground(style: style, glass: configuration.bar.glass, backgrounds: PopupBackgrounds())))
+    #expect(appearance.paddingVertical > 0)
     #expect(host.fittingSize == .zero)
 }
 
