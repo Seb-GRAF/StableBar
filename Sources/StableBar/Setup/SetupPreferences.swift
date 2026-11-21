@@ -595,15 +595,15 @@ struct SetupPreferences: Equatable, Codable, Sendable {
     func applying(to data: Data, configurationURL: URL? = nil,
                   context: ConfigurationContext = ConfigurationContext()) throws -> Data {
         let configuration: Configuration
+        var loader = ConfigurationLoader()
         if let configurationURL {
-            var loader = ConfigurationLoader()
             configuration = try loader.load(configurationURL, data: data, context: context)
         } else {
             configuration = try JSONDecoder().decode(Configuration.self, from: data)
         }
         if self == SetupPreferences() { return data }
         var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: data)
-        let edits = try edits(in: configuration, document: document)
+        let edits = try edits(in: configuration, document: document, widgetPackageIDs: loader.widgetPackageIDs)
         if edits.isEmpty { return data }
         var ids = configuration.widgets.map(\.id)
         for edit in edits { document = try edit.applying(to: document, widgetIDs: &ids) }
@@ -612,7 +612,8 @@ struct SetupPreferences: Equatable, Codable, Sendable {
 
     /// The edits that turn `configuration` into the bar setup builds. `document` is the configuration file's own
     /// content, which tells whether its widgets are still a starter bar.
-    func edits(in configuration: Configuration, document: [String: ConfigurationValue]? = nil) throws -> [ConfigurationEdit] {
+    func edits(in configuration: Configuration, document: [String: ConfigurationValue]? = nil,
+               widgetPackageIDs: [String: String] = [:]) throws -> [ConfigurationEdit] {
         var edits: [ConfigurationEdit] = []
         switch theme {
         case .current: break
@@ -659,7 +660,7 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         for set in widgetSets where set.state(in: target) != .conflict {
             if case let .store(id, _, position, _) = set {
                 // A Store widget turned off on the bar is turned on again where the preset has it, like a built-in one.
-                if set.state(in: target) == .disabled {
+                if set.state(in: target) == .disabled, widgetPackageIDs[id] == id {
                     edits.append(ConfigurationEdit(action: .unset, properties: [
                         "widgetOverrides": .object([id: .object(["enabled": .null])])
                     ]))

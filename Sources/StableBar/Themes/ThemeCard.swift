@@ -236,7 +236,7 @@ struct ThemeSampleBar: View {
         HStack(spacing: look.bar.spacing) {
             run(units.filter { $0.position == .left })
             Spacer(minLength: 0)
-            run(units.filter { [.notchLeft, .center, .notchRight].contains($0.position) })
+            run([WidgetPosition.notchLeft, .center, .notchRight].flatMap { position in units.filter { $0.position == position } })
             Spacer(minLength: 0)
             run(units.filter { $0.position == .right })
         }

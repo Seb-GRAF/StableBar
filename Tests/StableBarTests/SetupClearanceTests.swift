@@ -283,7 +283,8 @@ struct SetupClearanceTests {
 
     @Test func savedFinishReleasesClearanceWhenOpenAtLoginFails() throws {
         struct LoginItemsFailure: Error {}
-        let fixture = try ClearanceSetupFixture(setOpenAtLogin: { _ in throw LoginItemsFailure() })
+        var fails = true
+        let fixture = try ClearanceSetupFixture(setOpenAtLogin: { _ in if fails { throw LoginItemsFailure() } })
         defer { fixture.close() }
         let store = fixture.store
         var system = fixture.system
@@ -294,6 +295,9 @@ struct SetupClearanceTests {
         #expect(session.finished)
         #expect(session.error?.hasPrefix("Your bar settings were saved.") == true)
         #expect(store.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == true)
+        fails = false
+        session.finish()
+        #expect(session.error == nil)
     }
 
     @Test func clearanceDoesNotKeepASetupSessionAlive() throws {

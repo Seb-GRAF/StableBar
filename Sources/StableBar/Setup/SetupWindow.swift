@@ -285,7 +285,8 @@ final class SetupSession {
         // Until a setup finishes, Spaces on the first launch's starter stands in for a manager it didn't find, so setup
         // looks again.
         let document = try? JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationStore.configurationURL))
-        let provisional = !system.defaults.bool(forKey: SetupProgress.completedKey) && document.map(SetupPreferences.isFirstLaunchSpacesStarter) == true
+        let completed = system.defaults.bool(forKey: SetupProgress.completedKey)
+        let provisional = !completed && document.map(SetupPreferences.isFirstLaunchSpacesStarter) == true
         workspaceSource = system.workspaceSource(provisional ? nil : store.namedWorkspaceSource)
         let bar = try? store.effectiveDocument["bar"]?.decoded([String: ConfigurationValue].self)
         recommendsWindowClearance = workspaceSource == .spaces && !system.windowManagerRuns() && bar?["keepWindowsClear"] == nil
@@ -299,7 +300,7 @@ final class SetupSession {
         preferences.workspaces = workspaceSource
         // A new configuration starts from Everyday; any other keeps its widgets until a preset is picked.
         let widgets = try? document?["widgets"]?.decoded([[String: ConfigurationValue]].self)
-        if resume == nil, widgets.map({ SetupPreferences.isMenuBarStarter($0) }) == true
+        if resume == nil, !completed, widgets.map({ SetupPreferences.isMenuBarStarter($0) }) == true
             || document.map(SetupPreferences.isFirstLaunchSpacesStarter) == true {
             preset = .everyday
             preferences = preferences.replacingPresetChoices(with: choices(for: .everyday, placement: preferences.placement))
@@ -372,7 +373,7 @@ final class SetupSession {
     func loadStoreWidgets() async {
         guard storeEntries == nil, !storeUnreachable else { return }
         if let entries = await system.storePackages(store.packageStoreClient) { storeEntries = entries } else { storeUnreachable = true }
-        guard let preset else { return }
+        guard !finished, let preset else { return }
         let sets = choices(for: preset, placement: preferences.placement).widgetSets
         if sets != preferences.widgetSets { preferences.widgetSets = sets }
     }
@@ -401,6 +402,7 @@ final class SetupSession {
 
     /// Shows the review of one of the chosen preset's Store widgets, as Found on your Mac does.
     func review(_ widget: (entry: PackageIndex.Entry, settings: [String: String])) async {
+        guard downloading == nil else { return }
         downloading = widget.entry.key
         defer { downloading = nil }
         do {
@@ -521,7 +523,7 @@ final class SetupSession {
             var loader = ConfigurationLoader()
             let base = try loader.load(store.configurationStore.configurationURL, context: store.configurationStore.context)
             let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationStore.configurationURL))
-            let edits = try sessionEdits + shown.edits(in: base, document: document)
+            let edits = try sessionEdits + shown.edits(in: base, document: document, widgetPackageIDs: loader.widgetPackageIDs)
             try store.configurationStore.setSessionEdits(edits)
             previewEditCount = edits.count
             self.base = base
@@ -663,7 +665,9 @@ final class SetupSession {
         Task { try? await setMenuBarHidden(menuBarHidAtStart) }
     }
 
+    /// Saves the bar, then registers Open at login. Once the bar is saved, it only tries Open at login again.
     func finish() {
+        guard !finished else { return registerOpenAtLogin() }
         calendarAccess = system.calendarAccess()
         accessibilityAccess = system.isTrusted()
         guard missingPermissions.isEmpty else {
@@ -682,18 +686,27 @@ final class SetupSession {
             releaseClearanceConfiguration()
             system.defaults.set(true, forKey: SetupProgress.completedKey)
             finished = true
+        } catch {
+            self.error = (saved ? "Your bar settings were saved. " : "") + errorMessage(error)
+            loginStatus = system.loginStatus()
+            return
+        }
+        registerOpenAtLogin()
+    }
+
+    private func registerOpenAtLogin() {
+        do {
             // A choice changes it, and so does the recommendation while it applies.
             let status = system.loginStatus()
             let enabled = status == .enabled || status == .requiresApproval
             if system.isInApplications(), let wanted = openAtLogin ?? (recommendationApplies(enabled: enabled) ? true : nil), wanted != enabled {
                 try system.setOpenAtLogin(wanted)
             }
-            loginStatus = system.loginStatus()
             error = nil
         } catch {
-            self.error = (saved ? "Your bar settings were saved. " : "") + errorMessage(error)
-            loginStatus = system.loginStatus()
+            self.error = "Your bar settings were saved. " + errorMessage(error)
         }
+        loginStatus = system.loginStatus()
     }
 
     private func releaseClearanceConfiguration() {

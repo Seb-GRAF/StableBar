@@ -214,7 +214,7 @@ struct SetupTourView: View {
             if session.step == .allow { if landed { reveal() } else { cover() } }
         }
         // Once macOS has answered for Automation, the bar's copy leaves Allow's stage for the bar's place.
-        .onChange(of: session.step == .allow && placementAnswered) { _, answered in
+        .onChange(of: session.step == .allow && placementAnswered, initial: true) { _, answered in
             if answered && !flown { withAnimation(reduceMotion ? .easeInOut(duration: 0.35) : .smooth(duration: 0.9)) { flown = true } }
         }
         // In the menu bar's place, the bar itself takes over from its copy once the copy has arrived.
@@ -892,7 +892,7 @@ struct SetupTourView: View {
 
     /// Saves the bar and closes setup, or keeps it open while Open at login waits for approval in macOS.
     private func finish(then next: (() -> Void)? = nil) {
-        if !session.finished {
+        if !session.finished || session.error != nil {
             session.finish()
             // A permission taken back since Finish setup sends the tour back to its row.
             if !session.missingPermissions.isEmpty { withAnimation(motion.stageAnimation) { session.step = .allow } }

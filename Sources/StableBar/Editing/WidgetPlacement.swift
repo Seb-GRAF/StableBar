@@ -81,9 +81,10 @@ enum WidgetPlacement {
         guard let start = section.firstIndex(where: moves) else { return widgets }
         if offset < 0, start > 0 { return try arrangement(moving: id, to: widget.position, before: section[start - 1].id, widgets: widgets) }
         // A pill draws at its first member, and one that takes others can have a spacer between its members.
-        if offset > 0, let nextIndex = section[start...].firstIndex(where: { !moves($0) }) {
+        let after = { (other: WidgetConfiguration) in !moves(other) && section.firstIndex(where: other.movesWith)! > start }
+        if offset > 0, let nextIndex = section[start...].firstIndex(where: after) {
             let next = section[nextIndex]
-            let following = section[(nextIndex + 1)...].first { !moves($0) && (next.group == nil || $0.group != next.group) }
+            let following = section[(nextIndex + 1)...].first { after($0) && (next.group == nil || $0.group != next.group) }
             return try arrangement(moving: id, to: widget.position, before: following?.id, widgets: widgets)
         }
         return widgets
