@@ -42,7 +42,7 @@ enum DocsImages {
             }
 
             let bar = try store("bar", theme: "clear")
-            try await save(hero(bar).background { backdrop(dark: dark) }, "hero", size: NSSize(width: 1100, height: 270), stores: [bar])
+            try await save(hero(bar).background { backdrop(dark: dark) }, "hero", size: NSSize(width: 1100, height: 480), stores: [bar])
 
             let themes = try ThemeCatalog(packages: samples.appending(path: "packages")).choices.map { choice in
                 (choice.manifest.name, try store(choice.manifest.id, theme: choice.manifest.id))
