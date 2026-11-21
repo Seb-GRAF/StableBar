@@ -569,15 +569,19 @@ enum SceneRenderer {
         } else if widget.hoverLayout != nil
                     || widget.layout == nil && configuration.providerType(of: widget) == DataSourceType.audio.name
                     && store.widgetScripts.scripts[id]?.output.values?["volume"] != nil {
-            let style = tooltipStyle(defaults: defaults, widget: widget.tooltipStyle)
+            let style = tooltipStyle(defaults: defaults, widget: widget.tooltipStyle,
+                                     states: StyleStates(mode: store.barPresentation.modePresentation(on: .monitor)))
             let appearance = WidgetAppearance(style, defaults: WidgetStyle())
+            let shadowInset = CGFloat(appearance.shadowRadius * 2 + 2)
             let states = store.barPresentation.presentations[id]?.style(on: .monitor).blockStates(open: false) ?? StyleStates()
-            open = AnyView(HoverControls(widget: widget, store: store, style: LayoutStyle(inherited: style, states: states, tracksHover: true),
-                                         runAction: { _, _ in })
-                .font(appearance.font)
-                .foregroundStyle(appearance.foreground)
-                .padding(.horizontal, appearance.paddingHorizontal)
-                .padding(.vertical, appearance.paddingVertical)
+            open = AnyView(TooltipWidth(maxWidth: TooltipWidth.widgetMaxWidth - shadowInset * 2) {
+                    HoverControls(widget: widget, store: store, style: LayoutStyle(inherited: style, states: states, tracksHover: true),
+                                  runAction: { _, _ in })
+                        .font(appearance.font)
+                        .foregroundStyle(appearance.foreground)
+                        .padding(.horizontal, appearance.paddingHorizontal)
+                        .padding(.vertical, appearance.paddingVertical)
+                }
                 .modifier(PopupBackground(style: style, glass: look.bar.glass, backgrounds: PopupBackgrounds()))
                 .fixedSize())
             gap = look.bar.popupGap(inPopup: false)

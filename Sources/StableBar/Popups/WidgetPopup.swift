@@ -3,6 +3,9 @@ import SwiftUI
 
 /// A tooltip's content at the width it needs, up to `maxWidth`, and as tall as its text is once it wraps there.
 struct TooltipWidth: Layout {
+    /// How wide a widget's tooltip grows, its shadow included, before its text wraps.
+    static let widgetMaxWidth: CGFloat = 320
+
     let maxWidth: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -292,7 +295,7 @@ final class WidgetPopup {
     /// Shows `content` in a tooltip under `anchor`, drawn in the widget's popup style, which opens and closes with the
     /// bar's popup motion.
     private func openTooltip(id: String, style widgetStyle: WidgetStyle, defaults: WidgetStyle, store: BarStore, anchor: NSView,
-                             maxWidth: CGFloat = 320, alignment: PopupAlignment = .center, sidePadding: Double = 10, ignoresMouseEvents: Bool,
+                             maxWidth: CGFloat = TooltipWidth.widgetMaxWidth, alignment: PopupAlignment = .center, sidePadding: Double = 10, ignoresMouseEvents: Bool,
                              @ViewBuilder content: (WidgetStyle) -> some View) {
         let window = anchor.window!
         let screen = window.screen!
