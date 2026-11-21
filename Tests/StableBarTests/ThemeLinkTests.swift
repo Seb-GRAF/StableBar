@@ -49,8 +49,12 @@ struct ThemeLinkTests {
         ("v=1&package=!!&config=e30", .damaged),
         ("v=1&package=e30&config=WzFd", .damaged),
         ("package=e30&config=e30", .damaged),
-        ("v=2&package=e30&config=e30", .unsupportedVersion("2")),
+        ("v=2&package=e30&config=e30", .damaged),
+        ("v=2&d=", .damaged),
+        ("v=2&d=!!", .damaged),
+        ("v=2&d=AAAA", .damaged),
         ("v=3&package=e30&config=e30", .unsupportedVersion("3")),
+        ("v=3&d=AAAA", .unsupportedVersion("3")),
         ("v=&package=e30&config=e30", .damaged),
         ("v=0&package=e30&config=e30", .damaged),
         ("v=-1&package=e30&config=e30", .damaged),
@@ -103,15 +107,15 @@ struct ThemeLinkTests {
         }
     }
 
-    @Test func themeLinksOverTheLimitsAreRefused() {
+    @Test func themeLinksOverTheLimitsAreRefused() throws {
         let prefix = "stablebar://theme?"
         let longLink = prefix + String(repeating: "x", count: 65_537 - prefix.utf8.count)
         #expect(longLink.utf8.count == 65_537)
         #expect(throws: ThemeLinkError.tooLong) { try ThemeLink(url: URL(string: longLink)!) }
 
-        let large = ThemeLink(manifest: paddedObject(bytes: 20_000), configuration: paddedObject(bytes: 13_000))
-        #expect(large.link.absoluteString.utf8.count < 65_536)
-        #expect(throws: ThemeLinkError.tooLarge) { try ThemeLink(url: large.link) }
+        let large = ThemeLink(manifest: paddedObject(bytes: 70_000), configuration: paddedObject(bytes: 61_073))
+        #expect(throws: ThemeLinkError.tooLarge) { try large.validateFiles() }
+        #expect(throws: ThemeLinkError.tooLarge) { try ThemeLink(url: compressedLink(large)) }
 
         let deep = ThemeLink(manifest: Data("{}".utf8), configuration: nestedObject(levels: 33))
         #expect(throws: ThemeLinkError.tooDeep) { try ThemeLink(url: deep.link) }
@@ -119,27 +123,46 @@ struct ThemeLinkTests {
 
     @Test func themeLinksAtTheLimitsAreAccepted() throws {
         #expect(ThemeLink.maximumLength == 65_536)
-        #expect(ThemeLink.maximumFileBytes == 32_768)
+        #expect(ThemeLink.maximumFileBytes == 131_072)
         #expect(ThemeLink.maximumDepth == 32)
-        #expect(ThemeLink.maximumValues == 372)
+        #expect(ThemeLink.maximumValues == 4_096)
 
         let link = ThemeLink(manifest: Data("{}".utf8), configuration: Data("{}".utf8))
         let prefix = link.link.absoluteString + "&x="
         let maximumLength = prefix + String(repeating: "x", count: 65_536 - prefix.utf8.count)
         #expect(try ThemeLink(url: URL(string: maximumLength)!) == link)
 
-        let maximumBytes = ThemeLink(manifest: paddedObject(bytes: 20_000), configuration: paddedObject(bytes: 12_768))
-        #expect(try ThemeLink(url: maximumBytes.link) == maximumBytes)
+        try ThemeLink(manifest: paddedObject(bytes: 70_000), configuration: paddedObject(bytes: 61_072)).validateFiles()
 
         let maximumDepth = ThemeLink(manifest: Data("{}".utf8), configuration: nestedObject(levels: 32))
         #expect(try ThemeLink(url: maximumDepth.link) == maximumDepth)
     }
 
+    @Test func compressedThemeLinksCarryTheExactFilesInAPayloadOfAtMost128KB() throws {
+        let sample = try sample()
+        let link = ThemeLink(manifest: Data(sample.manifest.utf8), configuration: Data(sample.configuration.utf8))
+        let url = try compressedLink(link)
+        #expect(url.absoluteString.hasPrefix("stablebar://theme?v=2&d="))
+        #expect(try ThemeLink(url: url) == link)
+
+        func payload(spaces: Int) throws -> Data {
+            try JSONEncoder().encode(["package": "{}", "config": "{" + String(repeating: " ", count: spaces) + "}"])
+        }
+        let spaces = try ThemeLink.maximumFileBytes - payload(spaces: 0).count
+        let full = ThemeLink(manifest: Data("{}".utf8), configuration: Data(("{" + String(repeating: " ", count: spaces) + "}").utf8))
+        #expect(try ThemeLink(url: compressedLink(payload: payload(spaces: spaces))) == full)
+        #expect(throws: ThemeLinkError.tooLarge) { try ThemeLink(url: compressedLink(payload: payload(spaces: spaces + 1))) }
+
+        for damaged in ["{", "[]", #"{"package":"{}"}"#, #"{"package":{},"config":"{}"}"#, #"{"package":"{}","config":"{}","widgets":"[]"}"#] {
+            #expect(throws: ThemeLinkError.damaged) { try ThemeLink(url: compressedLink(payload: Data(damaged.utf8))) }
+        }
+    }
+
     @Test(arguments: [false, true])
     func rawValuesAcrossBothFilesAreLimitedBeforeDecoding(inManifest: Bool) throws {
-        // Two roots, the array and its 369 scalars use all 372 values.
+        // Two roots and the array leave the rest of the values to its scalars.
         let scalars = ["null", "true", "false", "-12.5e2", #""commas, [ ] { } \" \\ \u0066""#]
-        let entries = (0..<369).map { scalars[$0 % scalars.count] }.joined(separator: ",")
+        let entries = (0..<ThemeLink.maximumValues - 3).map { scalars[$0 % scalars.count] }.joined(separator: ",")
         let full = Data((#"{"values":["# + entries + "]}").utf8)
         let empty = Data("{}".utf8)
         let link = ThemeLink(manifest: inManifest ? full : empty, configuration: inManifest ? empty : full)
@@ -152,7 +175,7 @@ struct ThemeLinkTests {
     }
 
     @Test func duplicateKeysCannotHideValuesFromTheRawLimit() {
-        let entries = Array(repeating: #""x":{}"#, count: 371).joined(separator: ",")
+        let entries = Array(repeating: #""x":{}"#, count: ThemeLink.maximumValues - 1).joined(separator: ",")
         let link = ThemeLink(manifest: Data("{}".utf8), configuration: Data(("{" + entries + "}").utf8))
 
         #expect(throws: ThemeLinkError.tooManySettings) {
@@ -165,7 +188,7 @@ struct ThemeLinkTests {
         let nested = nestedObject(levels: 501, padding: 30_800)
         let empty = Data("{}".utf8)
         let link = ThemeLink(manifest: inManifest ? nested : empty, configuration: inManifest ? empty : nested)
-        #expect(nested.count < 32_768)
+        #expect(nested.count < ThemeLink.maximumFileBytes)
         #expect(link.link.absoluteString.utf8.count < 65_536)
         #expect(throws: ThemeLinkError.tooDeep) {
             try ThemeLink(url: link.link)
@@ -207,7 +230,7 @@ struct ThemeLinkTests {
 
     @Test func excessiveDepthIsRefusedBeforeTheJSONParsersDepthLimit() {
         let link = ThemeLink(manifest: Data("{}".utf8), configuration: nestedObject(levels: 5_001))
-        #expect(link.configuration.count < 32_768)
+        #expect(link.configuration.count < ThemeLink.maximumFileBytes)
 
         #expect(throws: ThemeLinkError.tooDeep) {
             try ThemeLink(url: link.link)
@@ -269,9 +292,9 @@ struct ThemeLinkTests {
 
     @Test(arguments: [
         (ThemeLinkError.tooLong, "This theme link is too long. Install the theme's folder instead, with Open a folder… in the Store."),
-        (.unsupportedVersion("2"), "This theme link needs a newer version of StableBar."),
+        (.unsupportedVersion("3"), "This theme link needs a newer version of StableBar."),
         (.damaged, "This theme link is damaged. Copy it again from the page."),
-        (.tooLarge, "This theme is larger than a theme link can carry (32 KB)."),
+        (.tooLarge, "This theme is larger than a theme link can carry (128 KB)."),
         (.tooDeep, "This theme nests its settings more than 32 levels deep."),
         (.tooManyProfiles, "This theme has more than 16 profiles, which a theme link can't carry."),
         (.tooManySettings, "This theme has more settings than a link can carry. Install the theme's folder instead, with Open a folder… in the Store."),
@@ -375,6 +398,16 @@ struct ThemeLinkTests {
             #expect(throws: BarLinkError.damaged) { try BarLink(url: URL(string: damaged)!) }
         }
         #expect(throws: BarLinkError.damaged) { try BarLink(payload: Data(#"{"package":"{}","config":"{}"}"#.utf8)) }
+    }
+
+    private func compressedLink(_ link: ThemeLink) throws -> URL {
+        try compressedLink(payload: JSONEncoder().encode(["package": String(decoding: link.manifest, as: UTF8.self),
+                                                          "config": String(decoding: link.configuration, as: UTF8.self)]))
+    }
+
+    private func compressedLink(payload: Data) throws -> URL {
+        let compressed = try (payload as NSData).compressed(using: .zlib) as Data
+        return URL(string: "stablebar://theme?v=2&d=" + ThemeLink.encoded(compressed))!
     }
 
     private func paddedObject(bytes: Int) -> Data {

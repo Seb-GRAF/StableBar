@@ -4,27 +4,29 @@ import XCTest
 @testable import StableBar
 
 final class ThemePreviewTests: XCTestCase {
-    func testCatalogHasBuiltInThenBundledNamesThenInstalledVersionsWithInjectableResources() throws {
+    func testCatalogListsTheIncludedThemesInOrderThenInstalledVersionsAndARetiredOneOnlyWhileSelected() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let installed = try fixture.theme(#"{}"#)
-        let catalog = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes)
-        let choices = catalog.choices
-        XCTAssertEqual(choices.first?.key, "built-in")
-        XCTAssertTrue(choices.first?.isBuiltIn == true)
-        XCTAssertNil(choices.first?.edit.properties)
-        let bundled = choices.filter { $0.isBundled && !$0.isBuiltIn }
-        XCTAssertEqual(bundled.map(\.title), bundled.map(\.title).sorted())
-        XCTAssertEqual(bundled.count, 6)
-        XCTAssertEqual(choices.last?.key, installed.key)
+        let included = ["clear", "glass", "tonal", "slim", "dot", "gloss", "sticker"]
+        let choices = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes).choices
+        XCTAssertEqual(choices.map(\.key), included + [installed.key])
+        XCTAssertEqual(choices.map(\.title), ["Clear", "Glass", "Tonal", "Slim", "Dot", "Gloss", "Sticker", "Test theme · 1"])
+        XCTAssertEqual(choices.first?.edit.properties, ["id": .string("clear")])
         XCTAssertEqual(choices.last?.edit.properties, installed.selection)
-        XCTAssertEqual(themeChoices(packages: fixture.packages.directory, themesDirectory: fixture.themes).map(\.key), Array(choices.dropFirst()).map(\.key))
+        for retired in ["built-in", "nord", "slate"] {
+            let selected = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes, selectedKey: retired).choices
+            XCTAssertEqual(selected.map(\.key), included + [retired, installed.key])
+            XCTAssertEqual(selected[included.count].title, "Custom")
+        }
+        let builtIn = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes, selectedKey: "built-in").choices
+        XCTAssertNil(try XCTUnwrap(builtIn.first { $0.isBuiltIn }).edit.properties)
     }
 
-    func testSamplesUseOnlyTheThemeAndDifferBetweenBuiltInNordCatppuccinAndPhosphor() throws {
+    func testSamplesUseOnlyTheThemeAndDifferBetweenBuiltInGlassSlimAndGloss() throws {
         let fixture = try ThemeGalleryFixture(##"{"defaults":{"fontSize":99},"bar":{"margin":90},"widgets":[]}"##)
         defer { fixture.close() }
-        let choices = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes).choices
+        let choices = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes, selectedKey: "built-in").choices
         var looks: [String: Configuration] = [:]
         for choice in choices {
             let preview = try ThemePreview(choice: choice, themesDirectory: fixture.themes)
@@ -36,25 +38,24 @@ final class ThemePreviewTests: XCTestCase {
             XCTAssertNotEqual(preview.light.bar.margin, 90)
         }
         let builtIn = try XCTUnwrap(looks["built-in"])
-        let nord = try XCTUnwrap(looks["nord"])
+        let glass = try XCTUnwrap(looks["glass"])
         XCTAssertNil(builtIn.bar.style.background)
         XCTAssertNotNil(builtIn.defaults.background)
-        XCTAssertNotNil(nord.bar.style.background)
-        XCTAssertNil(nord.defaults.background)
-        let catppuccin = try XCTUnwrap(looks["catppuccin"])
-        let phosphor = try XCTUnwrap(looks["phosphor"])
-        XCTAssertEqual(catppuccin.defaults.cornerRadius, 14)
-        XCTAssertEqual(phosphor.defaults.cornerRadius, 0)
-        XCTAssertNotEqual(catppuccin.defaults.accent, phosphor.defaults.accent)
-        XCTAssertEqual(phosphor.defaults.fontName, "Monaco")
+        XCTAssertNotNil(glass.bar.style.background)
+        XCTAssertNil(glass.defaults.background)
+        let slim = try XCTUnwrap(looks["slim"])
+        let gloss = try XCTUnwrap(looks["gloss"])
+        XCTAssertNotEqual(slim.defaults.accent, gloss.defaults.accent)
+        XCTAssertEqual(slim.defaults.fontName, "Menlo")
+        XCTAssertEqual(gloss.defaults.fontName, "Lucida Grande")
     }
 
     func testLemanInsetsItsFocusedTintWithoutChangingPopupsAndCatppuccinDrawsAPill() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
-        let choices = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes).choices
         func look(_ id: String) throws -> Configuration {
-            try ThemePreview(choice: XCTUnwrap(choices.first { $0.key == id }), themesDirectory: fixture.themes).light
+            let choices = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes, selectedKey: id).choices
+            return try ThemePreview(choice: XCTUnwrap(choices.first { $0.key == id }), themesDirectory: fixture.themes).light
         }
         func workspaceCornerRadius(_ look: Configuration) -> ConfigurationValue? {
             guard case .object(let style)? = look.workspaceDefaults.properties["style"] else { return nil }

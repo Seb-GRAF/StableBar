@@ -3,7 +3,7 @@ import os
 @testable import StableBar
 
 final class ThemeGalleryTests: XCTestCase {
-    @MainActor func testThemeSelectionAndBuiltInAreSavedImmediatelyAndUndoableWithoutSavingCommandLineEdits() async throws {
+    @MainActor func testThemeSelectionIsSavedImmediatelyAndUndoableWithoutSavingCommandLineEdits() async throws {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
         defer { fixture.close() }
         let store = try fixture.store()
@@ -12,40 +12,34 @@ final class ThemeGalleryTests: XCTestCase {
         let gallery = ThemeGallery(store: store)
         await gallery.refresh()
         XCTAssertEqual(gallery.selectedKey, "built-in")
-        let phosphor = try XCTUnwrap(gallery.choices.first { $0.key == "phosphor" })
-        gallery.select(phosphor)
-        XCTAssertEqual(gallery.selectedKey, "phosphor")
-        XCTAssertEqual(store.configuration?.defaults.fontName, "Monaco")
-        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("phosphor")]))
+        let slim = try XCTUnwrap(gallery.choices.first { $0.key == "slim" })
+        gallery.select(slim)
+        XCTAssertEqual(gallery.selectedKey, "slim")
+        XCTAssertEqual(store.configuration?.defaults.fontName, "Menlo")
+        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("slim")]))
         XCTAssertNil(try fixture.document()["bar"])
         XCTAssertEqual(store.configuration?.bar.margin, 12)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         XCTAssertFalse(store.customizationHistory.hasPendingChanges)
-        gallery.select(try XCTUnwrap(gallery.choices.first { $0.isBuiltIn }))
-        XCTAssertEqual(gallery.selectedKey, "built-in")
-        XCTAssertNil(try fixture.document()["theme"])
+        gallery.select(try XCTUnwrap(gallery.choices.first { $0.key == "glass" }))
+        XCTAssertEqual(gallery.selectedKey, "glass")
+        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("glass")]))
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 2)
         try store.customizationHistory.undo()
-        XCTAssertEqual(gallery.selectedKey, "phosphor")
+        XCTAssertEqual(gallery.selectedKey, "slim")
         try store.customizationHistory.undo()
         XCTAssertEqual(gallery.selectedKey, "built-in")
         XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
     }
 
-    @MainActor func testOlderThemesKeepTheirAppearanceAsCustomAndCanBeReplacedAndUndone() async throws {
-        for id in ["graphite", "island", "menu-bar", "minimal", "paper", "slate", "terminal", "terminal/1.0.0", "blueprint", "broadsheet",
-                   "brutalist", "everforest", "handheld", "kanagawa", "platinum", "rose-pine", "synthwave"] {
+    @MainActor func testRetiredThemesKeepTheirAppearanceAsCustomAndCanBeReplacedAndUndone() async throws {
+        for id in ["graphite", "island", "menu-bar", "minimal", "paper", "slate", "terminal", "blueprint", "broadsheet",
+                   "brutalist", "everforest", "handheld", "kanagawa", "platinum", "rose-pine", "synthwave",
+                   "built-in", "leman", "notch", "catppuccin", "nord", "gruvbox", "phosphor"] {
             let fixture = try ThemeGalleryFixture(#"{"includes":["theme.json"],"defaults":{"fontSize":17},"widgets":[]}"#)
             defer { fixture.close() }
-            let selection: String
-            if id == "terminal/1.0.0" {
-                _ = try fixture.packages.install(fixture.themes.appending(path: "terminal"))
-                selection = #"{"id":"terminal","version":"1.0.0"}"#
-            } else {
-                selection = #"{"id":"\#(id)"}"#
-            }
             let included = fixture.directory.appending(path: "theme.json")
-            try fixture.write(#"{"theme":\#(selection)}"#, to: included)
+            try fixture.write(#"{"theme":{"id":"\#(id)"}}"#, to: included)
             let original = try Data(contentsOf: fixture.url)
             let includedOriginal = try Data(contentsOf: included)
             let store = try fixture.store()
@@ -65,7 +59,7 @@ final class ThemeGalleryTests: XCTestCase {
             trial.cancel()
             XCTAssertEqual(store.effectiveDocument, configuration)
             XCTAssertEqual(try Data(contentsOf: fixture.url), original)
-            gallery.select(try XCTUnwrap(gallery.choices.first { $0.key == "phosphor" }))
+            gallery.select(try XCTUnwrap(gallery.choices.first { $0.key == "slim" }))
             await gallery.refresh()
             XCTAssertFalse(gallery.choices.contains(where: \.isLegacy))
             try store.customizationHistory.undo()
@@ -182,20 +176,23 @@ final class ThemeGalleryTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.packages.directory.appending(path: "my-phosphor/1.0.1").path))
     }
 
-    /// A name without ASCII letters or digits gives no theme id, so saving fails rather than inventing one.
-    @MainActor func testSavingAThemeNamedWithoutLettersOrDigitsFails() async throws {
-        let fixture = try ThemeGalleryFixture(#"{"theme":{"id":"phosphor"},"widgets":[]}"#)
-        defer { fixture.close() }
-        let store = try fixture.store()
-        defer { store.stop() }
-        let before = try Data(contentsOf: fixture.url)
-        let gallery = ThemeGallery(store: store)
-        await gallery.refresh()
-        await gallery.save(try XCTUnwrap(gallery.choices.first { $0.key == "phosphor" }), as: "日本")
-        XCTAssertNotNil(gallery.error(for: "phosphor"))
-        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
-        XCTAssertTrue(try fixture.packages.list().isEmpty)
-        XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+    /// A name without ASCII letters or digits gives no theme id, so saving fails rather than inventing one. An id that
+    /// belongs to a theme that comes with StableBar, such as Classic's, fails too.
+    @MainActor func testSavingAThemeNamedWithoutLettersOrDigitsOrWithAReservedIDFails() async throws {
+        for name in ["日本", "Classic", "Clear", "Nord"] {
+            let fixture = try ThemeGalleryFixture(#"{"theme":{"id":"slim"},"widgets":[]}"#)
+            defer { fixture.close() }
+            let store = try fixture.store()
+            defer { store.stop() }
+            let before = try Data(contentsOf: fixture.url)
+            let gallery = ThemeGallery(store: store)
+            await gallery.refresh()
+            await gallery.save(try XCTUnwrap(gallery.choices.first { $0.key == "slim" }), as: name)
+            XCTAssertNotNil(gallery.error(for: "slim"), name)
+            XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+            XCTAssertTrue(try fixture.packages.list().isEmpty)
+            XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+        }
     }
 
     @MainActor func testOfflineStoreLeavesLocalGalleryAndSelectionWorking() async throws {
@@ -209,10 +206,10 @@ final class ThemeGalleryTests: XCTestCase {
         await gallery.loadStore()
         XCTAssertTrue(gallery.storeUnavailable)
         XCTAssertTrue(gallery.storeThemes.isEmpty)
-        XCTAssertEqual(gallery.choices.map(\.key), ["built-in", "catppuccin", "gruvbox", "leman", "nord", "notch", "phosphor"])
-        XCTAssertEqual(gallery.previews.count, 7)
-        gallery.select(try XCTUnwrap(gallery.choices.first { $0.key == "catppuccin" }))
-        XCTAssertEqual(gallery.selectedKey, "catppuccin")
+        XCTAssertEqual(gallery.choices.map(\.key), ["clear", "glass", "tonal", "slim", "dot", "gloss", "sticker", "built-in"])
+        XCTAssertEqual(gallery.previews.count, 8)
+        gallery.select(try XCTUnwrap(gallery.choices.first { $0.key == "glass" }))
+        XCTAssertEqual(gallery.selectedKey, "glass")
         XCTAssertNil(store.customizationHistory.error)
     }
 
@@ -263,7 +260,7 @@ final class ThemeGalleryTests: XCTestCase {
             XCTAssertEqual(store.customizationHistory.undoSteps.count, 2)
         }
     }
-    @MainActor func testBuiltInSelectionOverridesAnIncludedThemeWithoutEditingTheInclude() async throws {
+    @MainActor func testSelectionOverridesAnIncludedThemeWithoutEditingTheInclude() async throws {
         let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"widgets":[]}"#)
         defer { fixture.close() }
         let includedURL = fixture.directory.appending(path: "included.json")
@@ -273,9 +270,9 @@ final class ThemeGalleryTests: XCTestCase {
         defer { store.stop() }
         let gallery = ThemeGallery(store: store)
         await gallery.refresh()
-        gallery.select(try XCTUnwrap(gallery.choices.first { $0.isBuiltIn }))
-        XCTAssertEqual(gallery.selectedKey, "built-in")
-        XCTAssertNil(store.configuration?.defaults.fontName)
+        gallery.select(try XCTUnwrap(gallery.choices.first { $0.key == "slim" }))
+        XCTAssertEqual(gallery.selectedKey, "slim")
+        XCTAssertEqual(store.configuration?.defaults.fontName, "Menlo")
         XCTAssertEqual(try Data(contentsOf: includedURL), included)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         try store.customizationHistory.undo()

@@ -53,17 +53,19 @@ struct PackageDetailView: View {
         } message: {
             Text("This version adds:\n\(additions.joined(separator: "\n"))")
         }
-        .confirmationDialog(manifest.kind == .theme ? "Use the built-in theme?" : "Remove \(manifest.name) from the bar?", isPresented: $confirmingRemoval) {
-            Button(manifest.kind == .theme ? "Use Built-in" : "Remove from bar") { library.deactivate(draft) }
+        .confirmationDialog(manifest.kind == .theme ? "Use Clear instead?" : "Remove \(manifest.name) from the bar?", isPresented: $confirmingRemoval) {
+            Button(manifest.kind == .theme ? "Use Clear" : "Remove from bar") { library.deactivate(draft) }
         } message: {
-            Text(manifest.kind == .theme ? "The built-in theme will replace this theme. Its files and settings stay available." : "All widgets from this package will be removed from the bar. Its files, settings and saved credentials stay available.")
+            Text(manifest.kind == .theme ? "Clear, the first included theme, will replace this theme. Its files stay installed, but its settings aren’t kept." : "All widgets from this package will be removed from the bar. Its files, settings and saved credentials stay available.")
         }
         .confirmationDialog(uninstalling.map { "Uninstall \($0.name) \($0.version)?" } ?? "",
                             isPresented: Binding(get: { uninstalling != nil }, set: { if !$0 { uninstalling = nil } }),
                             presenting: uninstalling) { version in
             Button("Uninstall version", role: .destructive) { Task { await library.uninstall(version) } }
         } message: { _ in
-            Text("This version’s files will be deleted and its widgets removed from the bar if active. Other versions, settings and saved credentials are kept. This cannot be undone.")
+            Text(manifest.kind == .theme
+                 ? "This version’s files will be deleted. A bar that uses it switches to Clear, and a screen that uses it to the bar’s theme, without its settings. Other versions stay installed. This cannot be undone."
+                 : "This version’s files will be deleted and its widgets removed from the bar if active. Other versions, settings and saved credentials are kept. This cannot be undone.")
         }
     }
 
@@ -128,7 +130,7 @@ struct PackageDetailView: View {
                 if manifest.kind != .theme && library.shownWidgets(draft) == 0 {
                     Button("Show widgets") { requestAdd(draft) }.buttonStyle(.borderedProminent)
                 }
-                Button(manifest.kind == .theme ? "Use Built-in" : "Remove from bar…") { confirmingRemoval = true }
+                Button(manifest.kind == .theme ? "Use Clear" : "Remove from bar…") { confirmingRemoval = true }
             } else if update == nil {
                 Button(manifest.kind == .theme ? "Use theme" : "Add to bar") { requestAdd(draft) }.buttonStyle(.borderedProminent)
             } else {
@@ -167,6 +169,10 @@ struct PackageDetailView: View {
             case .barLink?:
                 row("person.2", "The look of a shared bar", hint: path) {
                     PackageOriginBadge(source: .barLink)
+                }
+            case .retired?:
+                row("archivebox", "A theme StableBar no longer includes", hint: path) {
+                    PackageOriginBadge(source: .retired)
                 }
             case let .privateSource(name)?:
                 row("lock", "From \(name)", hint: [library.sourceHost(of: draft), library.privateSourceHint(draft)]

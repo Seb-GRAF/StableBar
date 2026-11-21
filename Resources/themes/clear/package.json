@@ -1,0 +1,9 @@
+{
+  "id": "clear",
+  "name": "Clear",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Text and symbols straight on the wallpaper with a soft halo, and a white capsule for the focused workspace.",
+  "author": "StableBar"
+}

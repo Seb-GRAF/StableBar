@@ -1,10 +1,10 @@
 {
   "$schema": "https://raw.githubusercontent.com/Seb-GRAF/StableBar/main/stablebar.schema.json",
+  "theme": {
+    "id": "clear"
+  },
   "bar": {
-    "height": 40,
-    "offset": 0,
-    "inset": 12,
-    "spacing": 8
+    "offset": 0
   },
   "widgets": [
     {

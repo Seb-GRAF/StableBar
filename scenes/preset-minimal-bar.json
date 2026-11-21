@@ -1,0 +1,66 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "theme": {
+      "id": "clear"
+    },
+    "widgets": [
+      {
+        "id": "apple",
+        "type": "appleMenu",
+        "position": "left"
+      },
+      {
+        "id": "app-menu",
+        "type": "appMenu",
+        "position": "left",
+        "expandOnHover": true
+      },
+      {
+        "id": "battery",
+        "type": "battery",
+        "position": "right",
+        "details": true
+      },
+      {
+        "id": "date",
+        "type": "clock",
+        "position": "right",
+        "format": "EEE d",
+        "role": "secondary",
+        "details": true
+      },
+      {
+        "id": "clock",
+        "type": "clock",
+        "position": "right",
+        "format": "HH:mm",
+        "role": "time",
+        "details": true
+      },
+      {
+        "id": "menu-bar-items",
+        "type": "menuBarItems",
+        "position": "right"
+      }
+    ]
+  },
+  "outputs": {
+    "battery": {
+      "text": "82%",
+      "icon": "battery.75percent",
+      "values": {
+        "percent": 0.82
+      },
+      "fields": {
+        "percent": "82",
+        "state": "battery",
+        "present": "true",
+        "health": "normal",
+        "timeRemaining": "285"
+      }
+    }
+  },
+  "activeApp": "com.apple.Notes",
+  "draw": "bar"
+}

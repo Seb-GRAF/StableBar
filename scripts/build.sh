@@ -22,8 +22,9 @@ cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 cp Resources/StatusBarIconTemplate*.png "$app/Contents/Resources/"
 cp Resources/SetupDay.heic Resources/SetupDusk.heic "$app/Contents/Resources/"
 cp Resources/shantell-sans-display.woff2 Resources/shantell-sans-hand.woff2 Resources/shantell-sans-OFL.txt "$app/Contents/Resources/"
-rm -rf "$app/Contents/Resources/themes"
+rm -rf "$app/Contents/Resources/themes" "$app/Contents/Resources/store-themes"
 cp -R Resources/themes "$app/Contents/Resources/themes"
+cp -R Resources/store-themes "$app/Contents/Resources/store-themes"
 if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
     # Sparkle ships ad-hoc signed. Sign its helpers, then the framework, as its documentation shows.
     sign=(codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY")

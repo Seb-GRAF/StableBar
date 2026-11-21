@@ -418,6 +418,8 @@ struct ConfigurationPathIndex<Value> {
 }
 
 let bundledThemesDirectory = Bundle.main.url(forResource: "themes", withExtension: nil)
+/// The Store's packages of the themes that moved to the Store, which an update installs without the network.
+let storeThemesDirectory = Bundle.main.url(forResource: "store-themes", withExtension: nil)
 
 struct ConfigurationLoader: Sendable {
     var themesDirectory = bundledThemesDirectory

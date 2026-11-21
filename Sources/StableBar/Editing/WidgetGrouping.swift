@@ -39,7 +39,10 @@ struct WidgetGrouping {
     let mainFile: String
     /// The profile Settings is editing; its changes go there.
     let editingProfile: String?
-    /// The main file with the unsaved Settings changes, read only to dissolve a group.
+    /// The selected theme's ID and name, and the groups it defines. Joining one of those groups, leaving it or emptying
+    /// it is an edit of the theme, since another theme may not have the group.
+    let theme: (id: String, name: String, groups: Set<String>)
+    /// The main file with the unsaved Settings changes, read only to dissolve a group or edit the theme.
     let mainDocument: () throws -> [String: ConfigurationValue]
 
     /// A new group's definition, whose look Settings then offers to change: a faint backdrop that works in light and dark,
@@ -52,14 +55,14 @@ struct WidgetGrouping {
         return .object(["style": .object(style)])
     }
 
-    /// The choices for `id` among `listed`, the widgets one screen shows in their order: the units on either side of
-    /// it in its position, except spacers.
-    func choices(for id: String, among listed: [WidgetConfiguration]) -> [Choice] {
+    /// The choices for `id` among `listed`, the widgets one screen shows in their order, and `listedGroups`, that screen's
+    /// groups: the units on either side of it in its position, except spacers and groups only the screen's own theme has.
+    func choices(for id: String, among listed: [WidgetConfiguration], groups listedGroups: [String: WidgetGroupConfiguration]) -> [Choice] {
         guard let widget = listed.first(where: { $0.id == id }), widget.group == nil, widget.content != .spacer else { return [] }
-        let units = BarUnit.make(widgets: listed.filter { $0.position == widget.position }, groups: groups)
+        let units = BarUnit.make(widgets: listed.filter { $0.position == widget.position }, groups: listedGroups)
         guard let index = units.firstIndex(where: { $0.id == "widget:\(id)" }) else { return [] }
         return [index - 1, index + 1].filter(units.indices.contains).map { units[$0] }.compactMap { unit in
-            if let group = unit.widgets[0].group { return .join(group) }
+            if let group = unit.widgets[0].group { return groups[group] == nil ? nil : .join(group) }
             return unit.isSpacer ? nil : .groupWith(unit.widgets[0].id)
         }
     }
@@ -72,8 +75,15 @@ struct WidgetGrouping {
         }
     }
 
-    func edits(_ choice: Choice, for id: String) -> [ConfigurationEdit] {
+    func edits(_ choice: Choice, for id: String) throws -> [ConfigurationEdit] {
         switch choice {
+        case let .join(group) where editingProfile == nil && theme.groups.contains(group):
+            // The position stays in the main file, where moving the group later moves every member.
+            var edits = [try themeEdit(ConfigurationEdit(action: .set, id: id, properties: ["group": .string(group)]))]
+            if let position = position(ofGroup: group), position != self.position(ofWidget: id) {
+                edits.append(ConfigurationEdit(action: .set, id: id, properties: ["position": .string(position.rawValue)]))
+            }
+            return edits
         case let .join(group):
             return [joining(id, group: group, position: position(ofGroup: group) ?? position(ofWidget: id))]
         case let .groupWith(other):
@@ -102,7 +112,8 @@ struct WidgetGrouping {
 
     /// Why Ungroup can't take every widget out of `group`, if it can't.
     func ungroupBlocker(_ group: String) -> String? {
-        widgets.first { $0.ownGroup == group && profileElsewhere(setting: $0.id) != nil }.flatMap { leaveBlocker($0.id) }
+        guard groups[group] != nil else { return "Only this screen's own theme has this group, so it can't be ungrouped here." }
+        return widgets.first { $0.ownGroup == group && profileElsewhere(setting: $0.id) != nil }.flatMap { leaveBlocker($0.id) }
     }
 
     /// The origin of `id`'s group when an active profile of another file sets it: the profile merges after anything
@@ -112,12 +123,14 @@ struct WidgetGrouping {
     }
 
     /// Takes `id` out of its own group in the profile being edited, else in the main file or the profile of it that
-    /// sets the group. A `null` hides a group that a layer below sets: an included file, a package or a template.
+    /// sets the group. An edit of the selected theme that sets it is removed. A `null` hides a group that a layer below
+    /// sets: an included file, a package or a template.
     func leaving(_ id: String) throws -> [ConfigurationEdit] {
         guard widgets.first(where: { $0.id == id })?.ownGroup != nil, profileElsewhere(setting: id) == nil else { return [] }
-        let origin = origins["widgets.\(id).group"]
-        let layer = editingProfile ?? (origin?.file == mainFile ? origin?.profile : nil)
         var document = try mainDocument()
+        let themeEdits = ThemeEdits(main: document, themeID: theme.id)
+        if let change = themeChange(id, in: themeEdits) { return [themeEdits.removal(of: [change])!] }
+        let layer = self.layer(setting: id)
         if let layer {
             let profiles = try document["profiles"]?.decoded([[String: ConfigurationValue]].self) ?? []
             document = try profiles.first { $0["name"] == .string(layer) }?["configuration"]?.decoded([String: ConfigurationValue].self) ?? [:]
@@ -148,7 +161,11 @@ struct WidgetGrouping {
     /// there names it.
     func dissolving(_ group: String) throws -> [ConfigurationEdit] {
         let own = widgets.filter { $0.ownGroup == group }
-        var edits = try own.flatMap { try leaving($0.id) }
+        let themeEdits = ThemeEdits(main: try mainDocument(), themeID: theme.id)
+        // One removal for every member, so that it deletes the theme's profile once nothing else is left in it.
+        let themed = Dictionary(uniqueKeysWithValues: own.compactMap { member in themeChange(member.id, in: themeEdits).map { (member.id, $0) } })
+        var edits = try own.filter { themed[$0.id] == nil }.flatMap { try leaving($0.id) }
+        edits += [themeEdits.removal(of: Array(themed.values))].compactMap { $0 }
         let definition = origins.filter { $0.key == "groups.\(group)" || $0.key.hasPrefix("groups.\(group).") }.values
         let namedElsewhere = contributions.contains { path, entries in
             path.hasSuffix(".group") && entries.contains { $0.origin.file != mainFile && $0.value == .string(group) }
@@ -168,9 +185,30 @@ struct WidgetGrouping {
             }
         }
         if groups[group]?.members.isEmpty == false {
-            edits.append(ConfigurationEdit(action: .groups, properties: [group: .object(["members": .array([])])]))
+            let emptying = ConfigurationEdit(action: .groups, properties: [group: .object(["members": .array([])])])
+            edits.append(editingProfile == nil && theme.groups.contains(group) ? try themeEdit(emptying) : emptying)
         }
         return edits
+    }
+
+    /// The main file's layer that sets `id`'s group: the profile being edited, else the main file or one of its profiles.
+    private func layer(setting id: String) -> String? {
+        let origin = origins["widgets.\(id).group"]
+        return editingProfile ?? (origin?.file == mainFile ? origin?.profile : nil)
+    }
+
+    /// The edit of the selected theme that puts `id` in its group, when the group comes from that edit.
+    private func themeChange(_ id: String, in themeEdits: ThemeEdits) -> ThemeEdit? {
+        guard let layer = self.layer(setting: id), layer == themeEdits.profile else { return nil }
+        return themeEdits.changes.first { $0.path == ["widgetOverrides", id, "group"] }
+    }
+
+    /// `edit` as an edit of the selected theme, in the main file's profile of its edits, created on the first one.
+    private func themeEdit(_ edit: ConfigurationEdit) throws -> ConfigurationEdit {
+        var edit = edit
+        edit.profile = ThemeEdits(main: try mainDocument(), themeID: theme.id).profileName(theme: theme.name)
+        edit.profileConditions = ["theme": .string(theme.id)]
+        return edit
     }
 
     private func joining(_ id: String, group: String, position: WidgetPosition?) -> ConfigurationEdit {
@@ -183,9 +221,11 @@ struct WidgetGrouping {
         widgets.first { $0.id == id }?.position
     }
 
-    /// Where the group's own members sit in the shared configuration, which the members it gains must share.
+    /// Where the group's own members sit in the shared configuration, which the members it gains must share. A group
+    /// that takes others has a pill in each position, so a widget joins the one beside it.
     private func position(ofGroup group: String) -> WidgetPosition? {
-        widgets.first { $0.ownGroup == group }?.position ?? widgets.first { $0.group == group }?.position
+        guard !groups[group]!.takesOthers else { return nil }
+        return widgets.first { $0.ownGroup == group }?.position ?? widgets.first { $0.group == group }?.position
     }
 
     private func newGroupID() -> String {
@@ -210,6 +250,12 @@ struct WidgetGrouping {
 extension WidgetGrouping {
     init(store: BarStore) {
         let configuration = store.configuration
+        let loader = store.configurationStore.configurationLoader
+        let themeID = String(store.configurationStore.selectedThemeKey.prefix { $0 != "/" })
+        let themeFiles = loader.packageIDs.filter { $0.value == themeID }.keys
+        let themeGroups = configuration?.groups.keys.filter { group in
+            store.contributions["groups.\(group)"]?.contains { themeFiles.contains($0.origin.file) } == true
+        } ?? []
         self.init(widgets: configuration?.widgets ?? [], groups: configuration?.groups ?? [:],
                   profiles: store.profiles,
                   contributions: store.contributions,
@@ -217,6 +263,7 @@ extension WidgetGrouping {
                   origins: store.origins,
                   mainFile: store.configurationStore.configurationURL.standardizedFileURL.path,
                   editingProfile: store.customizationHistory.editingProfile,
+                  theme: (themeID, themeFiles.first.flatMap { loader.packageNames[$0] } ?? themeID, Set(themeGroups)),
                   mainDocument: { [weak store] in try store?.configurationStore.editedMainDocument(replaying: store?.configurationStore.customizationEdits) ?? [:] })
     }
 }

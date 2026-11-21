@@ -27,7 +27,9 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 
 ## Code
 
-- **Settings keeps edits to the look with their theme** (2026-11-19, [#853]). What Settings changes about the look (theme colors, the shared widget, group, popup and bar styles, the bar's look and a widget's Style tab) goes into the main file's profile whose only condition is the selected theme, created on the first edit, so switching themes leaves it with that theme and choosing the theme again brings it back. Such a profile applies even while another profile is pinned. Look values in the main file outside profiles apply under every theme: Settings lists them and moves them in or out, but saves a look edit there only through **Apply to every theme**.
+- **Included themes don't change their look in place** (2026-11-20, [#873]). A revamp retires them and adds new themes under new IDs. Anyone whose configuration selects a retired theme keeps it, unchanged and with their edits. The themes the revamp retires move to the Store: the update installs a user's theme as its Store package, from a copy inside the app, so it needs no network, and Built-in, which a configuration without a theme draws, becomes the Store theme **Classic**. Themes retired before stay in **Yours** for those who use them and don't go to the Store. Someone who chose a theme chose how their bar looks, and their edits are tuned to it, so an update never redraws it. Retired themes keep shipping, frozen, for files the update can't rewrite, such as included files, but nothing besides the Store offers one to someone who doesn't have it. The fallback, the values under every theme that fill whatever it leaves out, never changes either: Fern and the themes people saved or made on the website lean on it.
+- **Settings keeps edits to the look with their theme** (2026-11-19, [#853]). What Settings changes about the look (theme colors, the shared widget, group, popup and bar styles, the bar's look and a widget's Style tab) goes into the main file's profile whose only condition is the selected theme, created on the first edit, so switching themes leaves it with that theme and choosing the theme again brings it back. Such a profile applies even while another profile is pinned. Look values in the main file outside profiles apply under every theme: Settings lists them and moves them in or out, but saves a look edit there only through **Apply to every theme**. Putting a widget in one of the theme's groups, taking it out and **Ungroup** on such a group are edits of the theme too ([#873]), since another theme may not have the group; groups people start with **Group With** stay in the main file.
+- **Previews of the bar read only wallpapers macOS doesn't protect** (2026-11-20, [#873]). Behind the theme cards, the bar's preview, setup's tiles and setup's own backdrop, StableBar shows the Mac's wallpaper only when its path, with symbolic links and `..` resolved, is in /System or /Library, where Apple's are, or in ~/Pictures outside a Photos library. A picture on the Desktop, in Documents, Downloads, iCloud Drive, another app's data or another volume could make macOS ask for access, so StableBar shows a drawn backdrop instead. Previews read it once, scaled down; setup reads it at the screen's size. Drawings made offscreen never read the Mac's wallpaper.
 - **Delete removes every version of a theme** (2026-11-19, [#853]). A gallery card stands for a whole theme, and saving a theme again adds a version, so **Delete…** uninstalls each installed version. Widget packages keep one **Uninstall…** per version ([#279]).
 - **A one-color image tints rather than switching by appearance** (2026-11-19, [#853]). `"tinted": true` draws an image in its text color, which follows the bar's real color. Choosing a light or a dark image by appearance can't: a bar like Notch's stays black in light mode.
 - **Sliders may take a role implicitly** (2026-11-17). Sliders with neither `filled` nor another role follow a nonempty `slider` role, so themes can style controls without owning widget layouts. Explicit `filled` choices retain their behavior, and an empty role retains the native control. Other blocks still require explicit roles.
@@ -40,20 +42,25 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 - **The mixer checks and asks for System Audio Recording through TCC** (2026-11-20, [#876]). Per-app volume and output play each app back through a Core Audio process tap, which needs System Audio Recording, and no public call checks that permission or asks for it. Without them, a tap the person declined plays silence while it mutes the app, so the mixer uses TCC's `TCCAccessPreflight` and `TCCAccessRequest`, asks only on the first change to an app and never in setup, and turns off on a macOS without them.
 - **The configuration file is public API** (2026-10-26, [#337]). People's files, Store packages and themes depend on it, so changes are additive. Renaming or removing a property, or changing what it means, needs a migration, a test that loads the old form and a maintainer's OK. StableBar 0.9.0 and later, and betas built after [#337], skip the properties they don't know, with a warning, once the configuration says a newer release wrote it. Earlier versions stop at the first one. The [guide](docs/configuration.md#files-from-a-newer-stablebar) has the exact rules. Migrations of an old form run in memory on every file the loader reads, so includes and packages stay as they are, and are saved into the main file and screen setups' own bars at launch. A migration of values people can still choose skips files pinned to a release ([#223]).
 - **Theme links carry only a theme** (2026-11-16, [#676]). A
-  `stablebar://theme?v=1&package=…&config=…` link carries only `package.json` and `config.json`: at
-  most 64 KB for the URL, 32 KB for the two decoded files together, 32 levels of JSON nesting, 16
-  profiles and 372 JSON values across both files. Reference expansion shares a budget of 300,000
+  `stablebar://theme?v=1&package=…&config=…` link carries only `package.json` and `config.json`; a
+  `stablebar://theme?v=2&d=…` link carries them as the strings `package` and `config` of one JSON
+  payload, compressed and encoded as a bar link's `d`. Either holds at most 64 KB for the URL, 128 KB
+  for the two decoded files together and for a `v=2` payload, 32 levels of JSON nesting, 16 profiles
+  and 4,096 JSON values across both files. The first caps were 32 KB and 372 values, four times the
+  values of the largest bundled theme of the time. Dot and Gloss outgrew them, so since [#873] they
+  match a bar link's payload, at least twice the largest included theme. Reference expansion shares a budget of 300,000
   units and 8,000,000 bytes of reference origin paths; a link exceeding either is refused as too
   many references. Theme configuration keys are `tokens`,
   `defaults`, `popupDefaults`, `groupDefaults`, `roles`, `workspaceDefaults`, `bar`, `groups` and `profiles`. Other
   keys are refused, including legacy `customization` and `removedWidgets`; an empty `widgets` list
   is ignored. Screenshots, includes and extra files are refused. At the root and in every profile,
   `bar` must be a literal object with only `height`, `margin`, `inset`, `spacing`, `background`,
-  `style`, `notchWidth`, `notchSpacing`, `fillNotch`, `popupOffset` and `glass`. Inside `bar`,
+  `style`, `divider`, `notchWidth`, `notchSpacing`, `fillNotch`, `popupOffset` and `glass`. Inside `bar`,
   numbers must be literal; colors may use tokens or settings with `choices`. Free-text string settings under
   `bar` are refused, and references cannot supply the `bar` object or its keys. This keeps links
   from changing the bar's edge, its offset or the menu bar's auto-hide. Current and legacy bundled
-  theme IDs are reserved, and a non-theme package's ID cannot be reused. An installed ID and
+  theme IDs are reserved, and so is `classic`, which an update installs from the app ([#873]);
+  Save as Theme refuses them too. A non-theme package's ID cannot be reused. An installed ID and
   version are reused only when both files match byte for byte; otherwise the author raises the
   version on the page. The app never renumbers a theme.
 - **Theme links bound bar values** (2026-11-16, [#676]). Every numeric value under `bar`, including
@@ -63,7 +70,9 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   0…50, `bar.margin` 0…40 and `bar.popupOffset` 0…40 (its pending control in [#664]). Within
   `bar.style` and its states, border width uses 0…6, corner radius 0…40, font size 6…40,
   horizontal/vertical padding 0…40 and opacity 0…1. `bar.glass.transparency` uses 0…1.
-  Gradients in `bar.background` and style backgrounds use locations 0…1 and angle 0…360. These bounds follow Settings controls. With no
+  `bar.divider` uses 0…6 for its width and 0…100 for its height, and, as in `bar.style`, 0…40 for its
+  corner radius and 0…1 for its opacity. Gradients in `bar.background`, style backgrounds and
+  `bar.divider.background` use locations 0…1 and angle 0…360. These bounds follow Settings controls. With no
   Settings controls, `bar.notchWidth` uses 0…1,000, `bar.notchSpacing` 0…100 and style offsets
   −1,000…1,000. All remaining numeric values use 0…1,000, including style height, spacing and edge
   padding. These refusals apply to links; folder themes keep the ordinary configuration rules.
@@ -103,7 +112,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   of it with the right-hand ones, where a bar made on a wide monitor doesn't fit. Other screens
   keep them centered. Limits: 64 KB for the URL,
   128 KB for the decoded payload, 32 levels of JSON nesting and 4,096 JSON values. Theme links
-  don't change.
+  have had the same caps since [#873].
 - **A native provider may read a macOS tool's output** (2026-11-16, [#220]). When no public API gives the data and the tool needs no permission, a native provider can run a macOS command-line tool, off the main actor and without a shell: `bluetooth` reads every connected device's battery from `system_profiler`. Apple doesn't document the tool's output keys, so a missing or renamed key leaves that value empty instead of failing the provider.
 - **A package can't move another party's credentials** (2026-11-17, [#85], [#744]). A package may set the `url` of a provider, directly or in a profile, only when no file or profile gives that provider a token other than one of that package's own secrets, and no other file sets its `headers`. A package without commands can reach the Store after CI alone, so it must not point your token, a header you typed or another package's secret at its own host. In its own files, a package writes out each provider's `url` and `headers`, without `@token.` references, so StableBar needn't follow tokens to see where a request goes or what it sends. The check doesn't work out which profiles can be active together, so it can refuse an unusual but harmless setup. URLs and headers set in your own files stay free, `@token.` references included.
 - **Tests keep their own time** (2026-11-08, [#491]). Code whose tests depend on time takes a clock, and the test clock lives in the repository rather than in a new dependency.
@@ -141,4 +150,5 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 [#807]: https://github.com/stablebox/StableBar/issues/807
 [#853]: https://github.com/stablebox/StableBar/issues/853
 [#854]: https://github.com/stablebox/StableBar/issues/854
+[#873]: https://github.com/stablebox/StableBar/issues/873
 [#876]: https://github.com/stablebox/StableBar/issues/876

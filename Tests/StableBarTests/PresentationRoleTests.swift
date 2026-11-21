@@ -52,6 +52,32 @@ private func presentationConfiguration(_ json: String) throws -> Configuration {
         == HexColor(0xaa8844ff))
 }
 
+@Test @MainActor func aGroupsTextColorWinsOverDefaultsAndRolesButNotTheWidgetsOwnStyleOrStates() throws {
+    let config = try presentationConfiguration(##"""
+    {"defaults":{"foreground":"#111111","states":{"warning":{"foreground":"#222222"}}},"roles":{"time":{"foreground":"#333333"}},
+     "groups":{"pill":{"style":{"foreground":"#444444"},"members":[{"id":"time"}]}},
+     "screens":{"laptop":{"layout":{"left":["time"]}}},
+     "widgets":[{"id":"time","type":"clock","role":"time","position":"right"},
+       {"id":"own","type":"clock","group":"pill","style":{"foreground":"#555555"},"position":"right"},
+       {"id":"alert","type":"script","command":"true","group":"pill","position":"right",
+        "rules":[{"when":{"field":"level","equals":"high"},"state":"warning"}]},
+       {"id":"alone","type":"clock","role":"time","position":"left"}]}
+    """##)
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
+    store.configuration = config
+    let script = ScriptWidget()
+    try script.accept(ScriptOutput.read(Data(#"{"text":"!","fields":{"level":"high"}}"#.utf8)))
+    store.widgetScripts.scripts["alert"] = script
+    store.barPresentation.preparePresentations()
+    defer { store.stop() }
+    func foreground(_ id: String) -> HexColor? { store.barPresentation.presentations[id]?.style.style(hovered: false).foreground }
+    #expect(foreground("time") == HexColor(0x444444ff))
+    #expect(foreground("own") == HexColor(0x555555ff))
+    #expect(foreground("alert") == HexColor(0x222222ff))
+    #expect(foreground("alone") == HexColor(0x333333ff))
+    #expect(store.barPresentation.presentations["time"]?.style(on: .laptop).style(hovered: false).foreground == HexColor(0x333333ff))
+}
+
 @Test func roleBlocksOwnTheirBoxWhileChildrenOnlyInheritTypographyAndNestedTextStates() throws {
     let config = try presentationConfiguration(##"""
     {"roles":{"heading":{"fontSize":16,"background":"#123456","paddingHorizontal":9,"width":200,

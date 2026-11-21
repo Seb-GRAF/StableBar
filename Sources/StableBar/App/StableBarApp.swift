@@ -618,17 +618,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func showSetup() {
-        setup.show(store: store,
-            arrangeBar: { [weak self] in self?.store.barEditing.begin() },
-            customizeWidgets: { [weak self] in
-                guard let self else { return }
-                customization.show(store: store, section: .widgets)
-            },
-            showProfile: { [weak self] name in
-                guard let self else { return }
-                customization.show(store: store, section: .profiles)
-                store.onCustomizeProfile?(name)
-            })
+        setup.show(store: store, editBar: { [weak self] in self?.store.barEditing.begin() })
     }
     @objc private func quit() { NSApp.terminate(nil) }
 

@@ -48,7 +48,7 @@ final class ApplicationMoveController {
             barConfiguration: store.configurationStore.configurationURL, edits: store.configurationStore.sessionEdits.map(ApplicationMoveResume.Edit.init))
     }
 
-    static let setupHint = "Use Finishing touches in setup to move StableBar to Applications."
+    static let setupHint = "Use the last step of setup to move StableBar to Applications."
 
     func cancel() { offer = nil; error = nil }
 
@@ -129,7 +129,7 @@ struct ApplicationMoveControls: View {
                 }
             } else {
                 if setup {
-                    moveButton.buttonStyle(SetupButtonStyle(prominent: false))
+                    moveButton.buttonStyle(GlassButtonStyle(selected: false, highlighted: true, size: .compact))
                         .fixedSize(horizontal: true, vertical: false)
                     if controller.offer != nil { Button("Cancel", action: controller.cancel).buttonStyle(.plain) }
                 } else {
@@ -140,7 +140,7 @@ struct ApplicationMoveControls: View {
                 }
                 if controller.error != nil {
                     if setup {
-                        finderButton.buttonStyle(SetupButtonStyle(prominent: false))
+                        finderButton.buttonStyle(GlassButtonStyle(selected: false, highlighted: true, size: .compact))
                     } else {
                         finderButton
                     }

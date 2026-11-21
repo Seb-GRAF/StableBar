@@ -46,13 +46,14 @@ private let row = #"""
     let bar = try GroupingFixture(row)
     defer { bar.close() }
     let grouping = bar.grouping
-    #expect(grouping.choices(for: "a", among: bar.widgets) == [.groupWith("b")])
-    #expect(grouping.choices(for: "b", among: bar.widgets) == [.groupWith("a"), .groupWith("c")])
-    #expect(grouping.choices(for: "c", among: bar.widgets) == [.groupWith("b")])
-    #expect(grouping.choices(for: "d", among: bar.widgets) == [])
-    #expect(grouping.choices(for: "gap", among: bar.widgets) == [])
-    #expect(grouping.choices(for: "e", among: bar.widgets) == [])
-    #expect(grouping.choices(for: "b", among: bar.widgets.filter { $0.id != "a" }) == [.groupWith("c")])
+    let groups = bar.store.configuration!.groups
+    #expect(grouping.choices(for: "a", among: bar.widgets, groups: groups) == [.groupWith("b")])
+    #expect(grouping.choices(for: "b", among: bar.widgets, groups: groups) == [.groupWith("a"), .groupWith("c")])
+    #expect(grouping.choices(for: "c", among: bar.widgets, groups: groups) == [.groupWith("b")])
+    #expect(grouping.choices(for: "d", among: bar.widgets, groups: groups) == [])
+    #expect(grouping.choices(for: "gap", among: bar.widgets, groups: groups) == [])
+    #expect(grouping.choices(for: "e", among: bar.widgets, groups: groups) == [])
+    #expect(grouping.choices(for: "b", among: bar.widgets.filter { $0.id != "a" }, groups: groups) == [.groupWith("c")])
 }
 
 @MainActor @Test func groupingWithTheWidgetBesideStartsAStyledGroupInOneUndoStep() throws {
@@ -64,8 +65,9 @@ private let row = #"""
     #expect(style == ["background": .string("#8080802e"), "cornerRadius": .number(14), "paddingHorizontal": .number(4)])
 
     let grouping = bar.grouping
-    #expect(grouping.choices(for: "a", among: bar.widgets) == [.join("group")])
-    #expect(grouping.choices(for: "b", among: bar.widgets) == [])
+    let groups = bar.store.configuration!.groups
+    #expect(grouping.choices(for: "a", among: bar.widgets, groups: groups) == [.join("group")])
+    #expect(grouping.choices(for: "b", among: bar.widgets, groups: groups) == [])
     #expect(grouping.group(of: .groupWith("a")) == "group-2")
     try bar.apply(grouping.edits(.join("group"), for: "a"))
     let units = BarUnit.make(widgets: bar.widgets.filter { $0.position == .right }, groups: bar.store.configuration!.groups)
@@ -86,11 +88,55 @@ private let row = #"""
     ]}
     """#)
     defer { bar.close() }
-    let laptop = try #require(bar.store.configuration?.onScreen(.laptop).widgets)
-    #expect(bar.grouping.choices(for: "e", among: laptop) == [.join("status")])
+    let laptop = try #require(bar.store.configuration?.onScreen(.laptop))
+    #expect(bar.grouping.choices(for: "e", among: laptop.widgets, groups: laptop.groups) == [.join("status")])
     try bar.apply(bar.grouping.edits(.join("status"), for: "e"))
     #expect(bar.groups()["e"] == "status")
     #expect(bar.widgets.first { $0.id == "e" }?.position == .right)
+}
+
+@MainActor @Test func aScreensOwnThemeDrawsItsGroupsButOffersToJoinOnlyThoseSettingsEdits() throws {
+    let bar = try GroupingFixture(#"""
+    {"theme":{"id":"clear"},"screens":{"laptop":{"theme":{"id":"dot"}}},"widgets":[
+      {"id":"time","type":"clock","position":"right"},
+      {"id":"note","type":"text","text":"Note","position":"left"},
+      {"id":"date","type":"clock","position":"left"}
+    ]}
+    """#)
+    defer { bar.close() }
+    let laptop = try #require(bar.store.configuration?.onScreen(.laptop))
+    #expect(BarUnit.make(widgets: laptop.widgets, groups: laptop.groups).map(\.id) == ["group:clock", "group-left:others", "widget:date"])
+    #expect(bar.grouping.choices(for: "date", among: laptop.widgets, groups: laptop.groups) == [])
+    #expect(bar.grouping.ungroupBlocker("others") != nil)
+}
+
+/// A screen without a layout of its own shows the shared one, and a move there takes the pill its own theme draws.
+@MainActor @Test func aMoveOnAScreenWithItsOwnThemeTakesThatThemesPill() throws {
+    let bar = try GroupingFixture(#"""
+    {"theme":{"id":"clear"},"screens":{"laptop":{"theme":{"id":"dot"}}},"widgets":[
+      {"id":"note","type":"text","text":"Note","position":"left"},
+      {"id":"memo","type":"text","text":"Memo","position":"left"}
+    ]}
+    """#)
+    defer { bar.close() }
+    try bar.apply(WidgetSetup(store: bar.store).editsMoving("note", to: .right, on: .laptop))
+    #expect(bar.widgets.filter { $0.position == .right }.map(\.id) == ["note", "memo"])
+}
+
+@MainActor @Test func aWidgetJoinsTheOthersPillBesideItWhereItIs() throws {
+    let bar = try GroupingFixture(#"""
+    {"groups":{"more":{"members":[{"others":true}]},"status":{"members":[{"type":"battery"}]}},"widgets":[
+      {"id":"note","type":"text","text":"Note","position":"right"},
+      {"id":"bat","type":"battery","position":"right"},
+      {"id":"task","type":"text","text":"Task","position":"left"},
+      {"id":"spare","type":"battery","position":"left"}
+    ]}
+    """#)
+    defer { bar.close() }
+    #expect(bar.grouping.choices(for: "spare", among: bar.widgets, groups: bar.store.configuration!.groups) == [.join("more")])
+    try bar.apply(bar.grouping.edits(.join("more"), for: "spare"))
+    #expect(bar.groups()["spare"] == "more")
+    #expect(bar.widgets.first { $0.id == "spare" }?.position == .left)
 }
 
 @MainActor @Test func leavingUnsetsAGroupTheMainFileSetsAndOverridesOneFromElsewhere() throws {
@@ -196,7 +242,7 @@ private let row = #"""
     #expect(bar.store.configuration?.groups["group"]?.style.cornerRadius == 20)
 }
 
-@MainActor @Test func ungroupingAThemesGroupEmptiesItsMembersInTheMainFile() throws {
+@MainActor @Test func ungroupingAThemesGroupEmptiesItsMembersInTheThemesEdits() throws {
     let bar = try GroupingFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
     defer { bar.close() }
     _ = try bar.fixture.theme(##"{"groups":{"time":{"style":{"background":"#000000"},"members":[{"type":"clock"}]}}}"##)
@@ -206,7 +252,53 @@ private let row = #"""
     #expect(bar.groups() == ["clock": "time"])
     try bar.apply(try bar.grouping.dissolving("time"))
     #expect(bar.groups() == ["clock": "-"])
-    #expect(try bar.fixture.document()["groups"] == .object(["time": .object(["members": .array([])])]))
+    let document = try bar.fixture.document()
+    #expect(document["groups"] == nil)
+    #expect(document["profiles"] == .array([.object([
+        "name": .string("Test theme edits"), "when": .object(["theme": .string("test-theme")]),
+        "configuration": .object(["groups": .object(["time": .object(["members": .array([])])])])
+    ])]))
+}
+
+@MainActor @Test func ungroupingRemovesTheThemesEditsOnceNothingElseIsLeftInThem() throws {
+    let widgets = #"[{"id":"time","type":"clock","position":"right"},{"id":"date","type":"clock","position":"right"}]"#
+    let bar = try GroupingFixture(#"{"widgets":\#(widgets)}"#)
+    defer { bar.close() }
+    _ = try bar.fixture.theme(#"{"groups":{"pill":{}}}"#)
+    try bar.fixture.write(#"{"theme":{"id":"test-theme","version":"1"},"widgets":\#(widgets)}"#, to: bar.fixture.url)
+    bar.store.configurationStore.reloadConfiguration()
+    try bar.apply(bar.grouping.edits(.join("pill"), for: "time"))
+    try bar.apply(bar.grouping.edits(.join("pill"), for: "date"))
+    #expect(bar.groups() == ["time": "pill", "date": "pill"])
+    try bar.apply(try bar.grouping.dissolving("pill"))
+    #expect(bar.groups() == ["time": "-", "date": "-"])
+    #expect(try bar.fixture.document()["profiles"] == nil)
+}
+
+@MainActor @Test func joiningAndLeavingAThemesGroupAreEditsOfThatTheme() throws {
+    let bar = try GroupingFixture(#"""
+    {"theme":{"id":"glass"},"widgets":[
+      {"id":"time","type":"clock","position":"right"},
+      {"id":"note","type":"text","text":"Note","position":"right"}
+    ]}
+    """#)
+    defer { bar.close() }
+    #expect(bar.grouping.choices(for: "note", among: bar.widgets, groups: bar.store.configuration!.groups) == [.join("time")])
+    try bar.apply(bar.grouping.edits(.join("time"), for: "note"))
+    #expect(bar.groups() == ["time": "time", "note": "time"])
+    #expect(try bar.fixture.document()["profiles"] == .array([.object([
+        "name": .string("Glass edits"), "when": .object(["theme": .string("glass")]),
+        "configuration": .object(["widgetOverrides": .object(["note": .object(["group": .string("time")])])])
+    ])]))
+
+    try bar.apply([ConfigurationEdit(action: .theme, properties: ["id": .string("clear")])])
+    #expect(bar.groups() == ["time": "-", "note": "-"])
+    try bar.apply([ConfigurationEdit(action: .theme, properties: ["id": .string("glass")])])
+    #expect(bar.groups() == ["time": "time", "note": "time"])
+
+    try bar.apply(try bar.grouping.leaving("note"))
+    #expect(bar.groups()["note"] == "-")
+    #expect(try bar.fixture.document()["profiles"] == nil)
 }
 
 @Test func theGroupsEditMergesIntoTheGroupsOfTheFile() throws {
@@ -390,7 +482,7 @@ private let row = #"""
 
 @MainActor @Test func aGroupAProfileOfAnIncludedFileSetsCanNotBeLeftHere() throws {
     let bar = try GroupingFixture(#"""
-    {"includes":["included.json"],"groups":{"status":{}},"widgets":[
+    {"includes":["included.json"],"groups":{"status":{},"other":{}},"widgets":[
       {"id":"own","type":"text","text":"A","position":"right"}
     ]}
     """#, includes: #"{"profiles":[{"name":"night","configuration":{"widgetOverrides":{"own":{"group":"status"}}}}]}"#)

@@ -12,6 +12,6 @@
     "../Tests/Fixtures/theme-origins/shared": "barLink",
     "../Tests/Fixtures/linked-theme": "themeLink"
   },
-  "draw": "settings",
+  "draw": "settings", "height": 2000,
   "section": "theme"
 }

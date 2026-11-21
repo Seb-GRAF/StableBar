@@ -5,21 +5,15 @@ import Testing
     var placing = SetupPlacement()
     #expect(placing.handle(.chose(.top, menuBarHides: false)) == [.checkAccess(request: 1)])
     #expect(placing.handle(.accessChecked(.allowed, request: 1))
-            == [.changeMenuBar(hidden: true, provesAccess: true, request: 1)])
+            == [.changeMenuBar(hidden: true, request: 1)])
     #expect(placing.handle(.menuBarChanged(failure: nil, request: 1)) == [.move(.top), .showError(nil)])
     #expect(placing.phase == .placed(.top))
 }
 
-@Test func leavingTheTopEdgeMovesTheBarAtOnce() {
-    var placing = SetupPlacement()
-    #expect(placing.handle(.chose(.bottom, menuBarHides: false))
-            == [.move(.bottom), .changeMenuBar(hidden: false, provesAccess: false, request: 1)])
-}
-
-@Test func refusedAccessWaitsAndAppliesOnceAllowedInSystemSettings() {
+@Test func refusedAccessPutsTheBarBelowTheMenuBarAndAppliesOnceAllowedInSystemSettings() {
     var placing = SetupPlacement()
     _ = placing.handle(.chose(.top, menuBarHides: false))
-    #expect(placing.handle(.accessChecked(.denied, request: 1)) == [.showError(nil)])
+    #expect(placing.handle(.accessChecked(.denied, request: 1)) == [.move(.belowMenuBar), .showError(nil)])
     #expect(placing.awaitingAccess == .top)
     #expect(placing.handle(.accessAllowed(menuBarHides: false)) == [.checkAccess(request: 2)])
     #expect(placing.awaitingAccess == nil)
@@ -43,12 +37,12 @@ import Testing
     #expect(placing.handle(.accessChecked(.denied, request: 1)).isEmpty)
     #expect(placing.phase == .checkingAccess(.top))
     #expect(placing.handle(.accessChecked(.allowed, request: 2))
-            == [.changeMenuBar(hidden: true, provesAccess: true, request: 2)])
+            == [.changeMenuBar(hidden: true, request: 2)])
 }
 
 @Test func aChangeFinishingForAnEarlierChoiceLeavesTheLatestOne() {
     var placing = SetupPlacement()
-    _ = placing.handle(.chose(.bottom, menuBarHides: false))
+    _ = placing.handle(.chose(.top, menuBarHides: true))
     _ = placing.handle(.chose(.belowMenuBar, menuBarHides: false))
     #expect(placing.handle(.menuBarChanged(failure: nil, request: 1)).isEmpty)
     #expect(placing.phase == .changingMenuBar(.belowMenuBar))
@@ -71,17 +65,17 @@ import Testing
     #expect(placing.handle(.accessAllowed(menuBarHides: false)).isEmpty)
 }
 
-@Test func aRefusedChangeExplainsAutomationAccess() {
+@Test func aRefusedChangeExplainsAutomationAccessAndPutsTheBarBelowTheMenuBar() {
     var placing = SetupPlacement()
-    _ = placing.handle(.chose(.belowMenuBar, menuBarHides: true))
+    _ = placing.handle(.chose(.top, menuBarHides: false))
     _ = placing.handle(.accessChecked(.allowed, request: 1))
     let effects = placing.handle(.menuBarChanged(failure: "error -1743", request: 1))
-    #expect(effects == [.showError("StableBar couldn’t show the macOS menu bar. \(MenuBarAutoHide.accessHint)")])
-    #expect(placing.phase == .failed(.belowMenuBar))
+    #expect(effects == [.move(.belowMenuBar), .showError("StableBar couldn’t hide the macOS menu bar. \(MenuBarAutoHide.accessHint)")])
+    #expect(placing.phase == .failed(.top))
 }
 
 @Test func aRestoredChoiceWaitingForAccessKeepsWaiting() {
     #expect(SetupPlacement(choice: .top, awaitingAccess: .top).phase == .awaitingAccess(.top))
-    #expect(SetupPlacement(choice: .bottom, awaitingAccess: nil).phase == .placed(.bottom))
+    #expect(SetupPlacement(choice: .top, awaitingAccess: nil).phase == .placed(.top))
     #expect(SetupPlacement(choice: nil, awaitingAccess: nil).phase == .unchosen)
 }

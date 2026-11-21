@@ -170,13 +170,19 @@ enum SceneRenderer {
         for (name, file) in scenes {
             do {
                 let scene = try SceneFile.read(file)
+                let wallpaper = try scene.wallpaper.map { path in
+                    guard let image = NSImage(contentsOf: URL(filePath: path, relativeTo: file.deletingLastPathComponent()).standardizedFileURL) else {
+                        throw CommandFailure(message: "wallpaper: Couldn't read the image \(path).")
+                    }
+                    return image
+                }
                 var images: [ConfigurationValue] = []
                 for appearance in scene.appearances {
                     let store = try store(for: scene, at: file, in: work.appending(path: "\(name)-\(appearance.rawValue)"),
                                           themes: bundledThemesDirectory, appearance: appearance)
                     defer { store.stop() }
                     let image = "\(name)-\(appearance.rawValue).png"
-                    try await draw(scene, store: store, appearance: appearance, to: output.appending(path: image))
+                    try await draw(scene, store: store, appearance: appearance, wallpaper: wallpaper, to: output.appending(path: image))
                     images.append(.string(image))
                 }
                 entries[name] = .object(["images": .array(images)])
@@ -319,7 +325,7 @@ enum SceneRenderer {
     private static let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
 
     /// Draws what `scene` asks for, from `store`, in one appearance, to the PNG file `url`.
-    static func draw(_ scene: SceneFile, store: BarStore, appearance: SceneFile.Appearance, to url: URL) async throws {
+    static func draw(_ scene: SceneFile, store: BarStore, appearance: SceneFile.Appearance, wallpaper: NSImage? = nil, to url: URL) async throws {
         guard let configuration = store.configuration else { throw CommandFailure(message: "The scene has no configuration.") }
         let dark = appearance == .dark
         let width = CGFloat(scene.width ?? 1100)
@@ -332,7 +338,8 @@ enum SceneRenderer {
             } else {
                 AnyView(bar(store))
             }
-            try await OffscreenSnapshot.write(drawn(view.background { OffscreenSnapshot.backdrop(dark: dark) }, with: scene.accessibilityDisplay),
+            let content = view.background { backdrop(wallpaper, dark: dark) }
+            try await OffscreenSnapshot.write(drawn(content, with: scene.accessibilityDisplay),
                                               size: NSSize(width: width, height: height), dark: dark, to: url)
         case .editBar:
             store.barEditing.begin()
@@ -354,12 +361,12 @@ enum SceneRenderer {
                 navigation.view = view
             }
             try await drawPopup(popup, of: widget, store: store, navigation: navigation, height: CGFloat(scene.height ?? 600), dark: dark,
-                                accessibilityDisplay: scene.accessibilityDisplay, to: url)
+                                accessibilityDisplay: scene.accessibilityDisplay, wallpaper: wallpaper, to: url)
         case .update:
             store.update = AppUpdate.sample(star: (scene.starRequest ?? .repository).state)
             let popup = AppUpdate.popup
             try await drawPopup(popup, of: AppUpdate.tile(.available), store: store, height: CGFloat(scene.height ?? (popup.height ?? 420) + 48),
-                                dark: dark, accessibilityDisplay: [], to: url)
+                                dark: dark, accessibilityDisplay: [], wallpaper: nil, to: url)
         case .settings:
             let editor = ConfigurationEditor(store: store)
             if let id = scene.widget {
@@ -415,6 +422,7 @@ enum SceneRenderer {
                 .environment(\.feedbackSample, feedbackSample)
                 .environment(\.starRequestSample, (scene.starRequest ?? .repository).state)
                 .environment(\.calendarsSample, calendarsSample)
+                .environment(\.sceneWallpaper, wallpaper)
             try await OffscreenSnapshot.write(drawn(settings, with: []),
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
                                               dark: dark, ready: {
@@ -457,6 +465,7 @@ enum SceneRenderer {
                                               dark: dark, ready: { share.image != nil }, to: url)
         case .setup:
             try await drawSetup(scene.setup ?? SceneFile.Setup(), move: scene.applicationMove, store: store, macOSVersion: macOSVersion,
+                                wallpaper: wallpaper,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),
                                 dark: dark, to: url)
         }
@@ -471,10 +480,11 @@ enum SceneRenderer {
     private static let setupMenuBarHeight = 30.0
 
     /// Draws setup's tour at `setup`'s step, over a stand-in for the Mac that reads and changes nothing on it, with the
-    /// bar above it. The scene's choices are made once the tour shows, as a person makes them, so the tour sees the menu
-    /// bar hide or show.
+    /// bar above it once it has taken over from its copy. The scene's choices are made once the tour shows, as a person
+    /// makes them, so the tour sees the menu bar hide or show: from Allow on, Automation's Allow has been clicked unless
+    /// the scene says otherwise.
     private static func drawSetup(_ setup: SceneFile.Setup, move: SceneFile.ApplicationMove?, store: BarStore,
-                                  macOSVersion: MacOSVersion, size: NSSize, dark: Bool, to url: URL) async throws {
+                                  macOSVersion: MacOSVersion, wallpaper: NSImage?, size: NSSize, dark: Bool, to url: URL) async throws {
         guard let defaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
             throw CommandFailure(message: "setup: No defaults to draw with.")
         }
@@ -490,35 +500,34 @@ enum SceneRenderer {
         system.workspaceSource = { $0 ?? .spaces }
         system.windowManagerRuns = { false }
         system.hasBattery = { setup.battery }
-        system.hasNotchedDisplay = { setup.notch }
         system.isInApplications = { setup.inApplications }
         system.previewsOnTheBar = false
-        system.checkWorkspaces = { source, _ in
-            setup.workspaceCheck?.result ?? (source == .yabai ? .signalsMissing(configuration: "~/.yabairc") : .ipcOff)
-        }
-        system.yabaiSignalScript = YabaiSetupSignals.script()
         system.suggestedPackages = { _ in setup.suggested }
+        system.storePackages = { _ in setup.storeWidgets }
         let session = SetupSession(store: store, system: system,
                                    applicationMove: .sample(move, inApplications: setup.inApplications))
-        defer { session.workspaceConnection.hide() }
-        session.step = setup.step.rawValue
+        session.step = setup.step
         store.appMenu.hidesAccessWarning = true
         store.barEditing.setupIsOpen = true
         let choices = SetupChoices()
+        let backdrop = SetupBackdrop()
         let view = ZStack(alignment: .top) {
+            SetupDesktop(backdrop: backdrop)
             SetupTourView(session: session, display: display, menuBarHeight: { hides ? 0 : setupMenuBarHeight }, dock: 0,
-                          intro: false, finish: {}, skip: {}, reveal: {}, lower: {}, showProfile: nil)
+                          backdrop: backdrop, wallpaper: nil, close: {}, cover: {}, reveal: {}, lower: {}, editBar: {})
             SetupChrome(session: session, store: store)
         }
+        .environment(\.sceneWallpaper, wallpaper)
         .task {
-            if let placement = setup.placement { await session.place(placement) }
-            if let preset = setup.preset { session.toggle(preset) }
+            if [.allow, .done].contains(setup.step) && setup.automationAsked { await session.place(.top) }
+            await session.loadStoreWidgets()
+            // A new configuration starts with Everyday chosen already.
+            if let preset = setup.preset, session.preset != preset { session.toggle(preset) }
             await session.loadSuggestions()
             choices.made = true
         }
         try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, ready: {
-            choices.made && (setup.step != .touches || session.workspaceCheckSource == nil
-                            || session.workspaceConnection.result != .checking)
+            choices.made && backdrop.images != nil && !session.themePreviews.isEmpty
         }, to: url)
     }
 
@@ -527,9 +536,21 @@ enum SceneRenderer {
         var made = false
     }
 
-    /// The bar above setup's tour where its configuration puts it, since setup's choices show in the tour, not on the
-    /// bar, and the macOS menu bar over the top of the screen while it shows. The tour points at the bar from the same
-    /// configuration and the same menu bar, so the two agree.
+    /// The stand-in Mac's desktop, which shows once the tour's backdrop fades at Done: its wallpaper, as the tour draws it.
+    private struct SetupDesktop: View {
+        let backdrop: SetupBackdrop
+
+        var body: some View {
+            if let images = backdrop.images {
+                Image(decorative: images.sharp, scale: 1).resizable()
+            }
+        }
+    }
+
+    /// The bar above setup's tour where its configuration puts it, once it has taken the menu bar's place or setup has
+    /// reached its end, and the macOS menu bar over the top of the screen at the end while it shows. Until then, the
+    /// tour covers both and draws its own copy of the bar. The tour places the bar from the same configuration and the
+    /// same menu bar, so the two agree.
     private struct SetupChrome: View {
         let session: SetupSession
         let store: BarStore
@@ -538,12 +559,14 @@ enum SceneRenderer {
             let menuBar = session.menuBarHides ? 0 : setupMenuBarHeight
             let settings = store.configuration?.onScreen(ScreenKind(display)).bar
             ZStack(alignment: .top) {
-                if let settings, settings.position == .bottom {
+                if session.step != .done && session.placementPhase != .placed(.top) {
+                    Color.clear
+                } else if let settings, settings.position == .bottom {
                     bar(store).padding(.bottom, settings.offset)
                 } else {
                     bar(store).padding(.top, settings?.top(menuBar: menuBar) ?? 0)
                 }
-                if !session.menuBarHides {
+                if !session.menuBarHides && session.step == .done {
                     Rectangle().fill(.black.opacity(0.5)).frame(height: setupMenuBarHeight)
                 }
             }
@@ -585,7 +608,7 @@ enum SceneRenderer {
     /// `widget`'s popup over the backdrop, with its shadow, as the bar opens it.
     private static func drawPopup(_ popup: PopupConfiguration, of widget: WidgetConfiguration, store: BarStore,
                                   navigation: PopupNavigation = PopupNavigation(), height: CGFloat, dark: Bool,
-                                  accessibilityDisplay: [SceneFile.AccessibilityDisplay], to url: URL) async throws {
+                                  accessibilityDisplay: [SceneFile.AccessibilityDisplay], wallpaper: NSImage?, to url: URL) async throws {
         guard let look = store.configuration?.look(on: .monitor) else { throw CommandFailure(message: "The scene has no configuration.") }
         let popupWidth = CGFloat(popup.style.width ?? 360)
         let content = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults)),
@@ -596,9 +619,18 @@ enum SceneRenderer {
             .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background { OffscreenSnapshot.backdrop(dark: dark) }
+            .background { backdrop(wallpaper, dark: dark) }
         try await OffscreenSnapshot.write(drawn(content, with: accessibilityDisplay), size: NSSize(width: popupWidth + 48, height: height),
                                           dark: dark, to: url)
+    }
+
+    /// The scene's wallpaper, filling the drawing from its top edge, or the tour's backdrop without one.
+    @ViewBuilder private static func backdrop(_ wallpaper: NSImage?, dark: Bool) -> some View {
+        if let wallpaper {
+            Color.clear.overlay(alignment: .top) { Image(nsImage: wallpaper).resizable().scaledToFill() }
+        } else {
+            OffscreenSnapshot.backdrop(dark: dark)
+        }
     }
 
     /// `view` with the Accessibility display settings `settings` names on and the others off, since an offscreen drawing

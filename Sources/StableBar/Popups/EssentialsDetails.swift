@@ -113,6 +113,7 @@ struct EssentialsDetails: View {
                         HStack(spacing: 8) {
                             if let path = app["path"] {
                                 Image(nsImage: NSWorkspace.shared.icon(forFile: path)).resizable().frame(width: 18, height: 18)
+                                    .styledAppIcon(appearance.appIcons, color: appearance.foreground)
                             }
                             Text(app["name"] ?? "").lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                             Text(app["memory"] ?? "").frame(width: 68, alignment: .trailing)

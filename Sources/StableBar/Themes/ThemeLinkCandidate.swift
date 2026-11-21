@@ -45,8 +45,7 @@ final class ThemeLinkCandidate {
             guard inspection.manifest.kind == .theme else { throw ThemeLinkError.notATheme }
             guard !inspection.requiresReview else { throw ThemeLinkError.needsReview }
             let id = inspection.manifest.id
-            let bundled = store.configurationStore.themesDirectory?.appending(path: id)
-            if legacyThemeIDs.contains(id) || bundled.map({ FileManager.default.fileExists(atPath: $0.path) }) == true {
+            if isReservedThemeID(id, themesDirectory: store.configurationStore.themesDirectory) {
                 throw ThemeLinkError.reservedID(id)
             }
             try Self.checkInstalledID(id, packages: packages)
@@ -171,11 +170,12 @@ final class ThemeLinkCandidate {
             "bar.style.fontSize": 6...40,
             "bar.style.paddingHorizontal": 0...40, "bar.style.paddingVertical": 0...40,
             "bar.style.opacity": 0...1, "bar.popupOffset": 0...40, "bar.glass.transparency": 0...1,
+            "bar.divider.width": 0...6, "bar.divider.height": 0...100, "bar.divider.cornerRadius": 0...40, "bar.divider.opacity": 0...1,
             // Notch dimensions and other style numbers have no Settings control.
             "bar.notchWidth": 0...1_000, "bar.notchSpacing": 0...100,
             "bar.style.offsetX": -1_000...1_000, "bar.style.offsetY": -1_000...1_000
         ]
-        for fill in ["bar.background", "bar.style.background", "bar.style.hoverBackground"] {
+        for fill in ["bar.background", "bar.style.background", "bar.style.hoverBackground", "bar.divider.background"] {
             ranges["\(fill).gradient.angle"] = 0...360
             ranges["\(fill).gradient.locations"] = 0...1
         }

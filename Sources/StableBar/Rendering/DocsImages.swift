@@ -33,7 +33,7 @@ enum DocsImages {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for appearance in ["dark", "light"] {
             let dark = appearance == "dark"
-            func store(_ name: String, theme: String?, widgets: [[String: ConfigurationValue]] = barWidgets) throws -> BarStore {
+            func store(_ name: String, theme: String, widgets: [[String: ConfigurationValue]] = barWidgets) throws -> BarStore {
                 try sampleStore(in: samples.appending(path: "\(name)-\(appearance)"), theme: theme, dark: dark, widgets: widgets)
             }
             func save(_ content: some View, _ name: String, size: NSSize, stores: [BarStore], ready: () -> Bool = { true }) async throws {
@@ -41,27 +41,28 @@ enum DocsImages {
                                    to: directory.appending(path: "\(name)-\(appearance).png"))
             }
 
-            let bar = try store("bar", theme: "catppuccin")
-            try await save(hero(bar).background { backdrop(dark: dark) }, "hero", size: NSSize(width: 1100, height: 270), stores: [bar])
+            let bar = try store("bar", theme: "clear")
+            try await save(hero(bar).background { backdrop(dark: dark) }, "hero", size: NSSize(width: 1100, height: 480), stores: [bar])
 
             let themes = try ThemeCatalog(packages: samples.appending(path: "packages")).choices.map { choice in
-                (choice.manifest.name, try store(choice.manifest.id, theme: choice.isBuiltIn ? nil : choice.manifest.id))
+                (choice.manifest.name, try store(choice.manifest.id, theme: choice.manifest.id))
             }
             try await save(gallery(themes, dark: dark).background { backdrop(dark: dark) }, "themes",
                            size: NSSize(width: 1100, height: 78 * CGFloat(themes.count) + 10), stores: themes.map(\.1))
             themes.forEach { $0.1.stop() }
 
-            let controls = try store("controls", theme: "catppuccin", widgets: barWidgets + [controlsWidget])
+            let controls = try store("controls", theme: "clear", widgets: barWidgets + [controlsWidget])
             let popups = HStack(alignment: .top, spacing: 24) {
                 popup(controls, "system-monitor")
                 popup(controls, "meeting")
                 popup(controls, "controls")
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            try await save(popups.background { backdrop(dark: dark) }, "popups", size: NSSize(width: 1100, height: 330), stores: [controls])
+            .padding(.top, 24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            try await save(popups.background { backdrop(dark: dark) }, "popups", size: NSSize(width: 1100, height: 440), stores: [controls])
             controls.stop()
 
-            let essentials = try sampleStore(in: samples.appending(path: "essentials-\(appearance)"), theme: nil, dark: dark,
+            let essentials = try sampleStore(in: samples.appending(path: "essentials-\(appearance)"), theme: "clear", dark: dark,
                                              widgets: ["clock", "battery", "system", "network", "calendar", "disk"].map { type in
                 WidgetAddCatalog.builtIns.first { $0.id == type }!.add(position: .right, id: type)!.properties!
             }, native: true)
@@ -117,7 +118,7 @@ enum DocsImages {
         let configuration = store.configuration!
         let look = configuration.look(on: .monitor)
         let popupTop = configuration.barGeometry(for: display).drawingBottom
-            + look.widgets.first { $0.id == "meeting" }!.popup!.gap(below: look.bar)
+            + samplePopup(look.widgets.first { $0.id == "meeting" }!, store: store).gap(below: look.bar)
         return bar(store)
             .overlayPreferenceValue(BarAnchorPreference.self) { anchors in
                 GeometryReader { proxy in
@@ -150,13 +151,19 @@ enum DocsImages {
     private static func popup(_ store: BarStore, _ id: String) -> some View {
         let configuration = store.configuration!.look(on: .monitor)
         let widget = configuration.widgets.first { $0.id == id }!
-        let popup = widget.popup!
+        let popup = samplePopup(widget, store: store)
         let style = popup.baseStyle(widget: widget, defaults: configuration.popupDefaults.popupStyle(over: configuration.defaults))
         return PopupView(popup: popup, style: style, store: store, widget: widget)
             .environment(\.screenKind, .monitor)
             .frame(width: CGFloat(popup.style.width ?? 360))
             .fixedSize(horizontal: false, vertical: true)
             .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+    }
+
+    /// `widget`'s popup. Sample commands stand in for the Calendar and System providers, so a widget showing their details
+    /// gets the details popup its provider's name picks.
+    private static func samplePopup(_ widget: WidgetConfiguration, store: BarStore) -> PopupConfiguration {
+        widgetPopup(widget, store: store) ?? EssentialsPopup(rawValue: widget.providerName!)!.popup(timeZone: widget.timeZone)
     }
 
     @ViewBuilder private static func essentialsPopup(_ store: BarStore, _ id: String) -> some View {
@@ -175,7 +182,7 @@ enum DocsImages {
     /// A bar whose data comes from sample files, with Finder as the active app. Its workspaces come
     /// from a stand-in for AeroSpace, so the bar never reaches the AeroSpace running on this Mac, and
     /// its battery from a stand-in for the Mac's, so it draws as a battery provider does.
-    private static func sampleStore(in directory: URL, theme: String?, dark: Bool,
+    private static func sampleStore(in directory: URL, theme: String, dark: Bool,
                                     widgets: [[String: ConfigurationValue]], native: Bool = false) throws -> BarStore {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for (name, json) in sampleOutput { try Data(json.utf8).write(to: directory.appending(path: "\(name).json")) }
@@ -195,10 +202,10 @@ enum DocsImages {
                 (name, .object(["type": .string("command"), "command": .string("/bin/cat \"$CONFIG_DIR/\(name).json\""),
                                 "interval": .number(3600)]))
             })),
-            "widgets": .array(widgets.map(ConfigurationValue.object))
+            "widgets": .array(widgets.map(ConfigurationValue.object)),
+            "theme": .object(["id": .string(theme)])
         ]
         if native { configuration["providers"] = nil }
-        if let theme { configuration["theme"] = .object(["id": .string(theme)]) }
         let url = directory.appending(path: "config.json")
         try JSONEncoder().encode(configuration).write(to: url)
         let battery = try ScriptOutput.read(Data(sampleOutput["battery"]!.utf8))

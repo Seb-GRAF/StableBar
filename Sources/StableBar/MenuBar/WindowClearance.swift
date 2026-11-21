@@ -75,9 +75,15 @@ struct ManagerGap: Equatable {
 }
 
 /// The configuration file `manager` reads, when there is one. AeroSpace looks for `~/.aerospace.toml` before its
-/// folder in `XDG_CONFIG_HOME`, and OmniWM ignores an `XDG_CONFIG_HOME` that isn't an absolute path.
+/// folder in `XDG_CONFIG_HOME`, and OmniWM ignores an `XDG_CONFIG_HOME` that isn't an absolute path. yabai looks in
+/// `XDG_CONFIG_HOME` first, then `~/.config`, then the legacy dotfile.
 func managerConfiguration(_ manager: WorkspaceSource, home: URL, xdg: String?) -> URL? {
-    if manager == .yabai { return try? YabaiSetupSignals.configuration(home: home, xdg: xdg) }
+    if manager == .yabai {
+        var candidates: [URL] = []
+        if let xdg, !xdg.isEmpty { candidates.append(URL(filePath: xdg).appending(path: "yabai/yabairc")) }
+        candidates += [home.appending(path: ".config/yabai/yabairc"), home.appending(path: ".yabairc")]
+        return candidates.first { (try? $0.resolvingSymlinksInPath().resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == false }
+    }
     let config = xdg.flatMap { $0.hasPrefix("/") ? URL(filePath: $0) : nil } ?? home.appending(path: ".config")
     let candidates = manager == .aerospace
         ? [home.appending(path: ".aerospace.toml"), config.appending(path: "aerospace/aerospace.toml")]

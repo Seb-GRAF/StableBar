@@ -33,6 +33,7 @@ struct WorkspaceView: View {
                 let styles = configuration?.cellStyle(WorkspaceState(workspace), mode: mode) ?? WorkspaceCellStyle()
                 let hovered = hoveredWorkspace == workspace.name
                 let style = styles.label(hovered: hovered)
+                let show = style.show ?? .both
                 let glyph = styles.glyph(hovered: hovered)
                 let zoomedBelow = magnification.map { (glyph.height ?? 14) * ($0 - 1) } ?? 0
                 let textColor = style.foreground?.color ?? (workspace.isFocused ? appearance.accentText : appearance.foreground)
@@ -41,25 +42,27 @@ struct WorkspaceView: View {
                     .map { FocusedWindowHighlight(style: $0, color: textColor, magnifying: magnifying,
                                                   cornerRadius: $0.cornerRadius ?? styles.resting.cornerRadius ?? max(appearance.cornerRadius - 4, 0)) }
                 HStack(spacing: style.spacing ?? 4) {
-                    Button { workspaceStore.select(workspace) } label: {
-                        HStack(spacing: style.spacing ?? 4) {
-                            Text(workspace.label)
-                            if let layout = workspace.layout, let glyph = configuration?.layoutGlyphs?[layout] {
-                                Text(glyph)
+                    if show == .both || show == .label {
+                        Button { workspaceStore.select(workspace) } label: {
+                            HStack(spacing: style.spacing ?? 4) {
+                                Text(workspace.label)
+                                if let layout = workspace.layout, let glyph = configuration?.layoutGlyphs?[layout] {
+                                    Text(glyph)
+                                }
                             }
                         }
+                        .magnified(.label, by: magnifier, upTo: magnification)
+                        .help("Switch to workspace \(workspace.label)")
+                        .accessibilityLabel("Workspace \(workspace.label)\(workspace.isFocused ? ", focused" : workspace.isVisible ? ", visible" : "")")
+                        .accessibilityValue(layoutValue(for: workspace))
+                        .accessibilityAddTraits(workspace.isFocused ? .isSelected : [])
                     }
-                    .magnified(.label, by: magnifier, upTo: magnification)
-                    .help("Switch to workspace \(workspace.label)")
-                    .accessibilityLabel("Workspace \(workspace.label)\(workspace.isFocused ? ", focused" : workspace.isVisible ? ", visible" : "")")
-                    .accessibilityValue(layoutValue(for: workspace))
-                    .accessibilityAddTraits(workspace.isFocused ? .isSelected : [])
-                    if configuration?.showApps != false {
+                    if configuration?.showApps != false && (show == .both || show == .apps) {
                         if configuration?.windows == true {
                             ForEach(workspace.windows) { window in
                                 windowButton(windows: [window], below: zoomedBelow, action: { workspaceStore.focus(window) }) {
                                     HStack(spacing: style.spacing ?? 4) {
-                                        appIcon(window.app, style: glyph, spacing: style.spacing ?? 4,
+                                        appIcon(window.app, style: glyph, color: textColor, spacing: style.spacing ?? 4,
                                                 highlight: window.isFocused ? highlight : nil)
                                         if window.stackIndex > 0 {
                                             Text(String(window.stackIndex)).magnified(.label, by: magnifier, upTo: magnification)
@@ -80,7 +83,7 @@ struct WorkspaceView: View {
                                 let windows = workspace.windows.filter { $0.app.bundleID == app.bundleID }
                                 let focused = windows.contains(where: \.isFocused)
                                 windowButton(windows: windows, below: zoomedBelow, action: { workspaceStore.select(workspace) }) {
-                                    appIcon(app, style: glyph, spacing: style.spacing ?? 4, highlight: focused ? highlight : nil)
+                                    appIcon(app, style: glyph, color: textColor, spacing: style.spacing ?? 4, highlight: focused ? highlight : nil)
                                 }
                                 .help(magnification == nil ? app.name : "")
                                 .accessibilityValue(badgeValue(for: app))
@@ -95,6 +98,17 @@ struct WorkspaceView: View {
                 .padding(.leading, style.paddingLeading ?? style.paddingHorizontal ?? 7)
                 .padding(.trailing, style.paddingTrailing ?? style.paddingHorizontal ?? 7)
                 .frame(width: style.width.map { CGFloat($0) }, height: style.height.map { CGFloat($0) })
+                .background {
+                    if indicator == .cells {
+                        let shape = RoundedRectangle(cornerRadius: styles.resting.cornerRadius ?? max(appearance.cornerRadius - 4, 0))
+                        shape.fill(styles.resting.background?.shapeStyle ?? AnyShapeStyle(Color.clear))
+                            .overlay {
+                                if let border = styles.resting.borderColor { shape.strokeBorder(border.color, lineWidth: styles.resting.borderWidth ?? 1) }
+                            }
+                            .magnified(.background, by: magnifier, upTo: magnification)
+                            .allowsHitTesting(false)
+                    }
+                }
                 .padding(padding)
                 .background {
                     Button { workspaceStore.select(workspace) } label: {
@@ -193,7 +207,7 @@ struct WorkspaceView: View {
         return "Badge \(label)"
     }
 
-    @ViewBuilder private func appIcon(_ app: WorkspaceApp, style: WidgetStyle, spacing: CGFloat,
+    @ViewBuilder private func appIcon(_ app: WorkspaceApp, style: WidgetStyle, color: Color, spacing: CGFloat,
                                       highlight: FocusedWindowHighlight? = nil) -> some View {
         let zoom = magnification ?? 1
         let style = highlight.map { $0.style.inheriting(style) } ?? style
@@ -210,6 +224,7 @@ struct WorkspaceView: View {
                     .resizable()
                     .interpolation(.high)
                     .frame(width: style.width ?? 14, height: style.height ?? 14)
+                    .styledAppIcon(style.appIcons ?? appearance.appIcons, color: style.foreground?.color ?? color)
             }
         }
         // Inside the icon, so magnification zooms and slides the highlight with it.

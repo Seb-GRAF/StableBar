@@ -148,6 +148,18 @@ enum IndicatorPlacement: String, Decodable, CaseIterable, Sendable {
     case cell, belowBar
 }
 
+enum AppIcons: String, Decodable, CaseIterable, Sendable {
+    case color, tinted
+}
+
+enum ShadowSource: String, Decodable, CaseIterable, Sendable {
+    case content, shape
+}
+
+enum CellContent: String, Decodable, CaseIterable, Sendable {
+    case both, label, apps, none
+}
+
 struct GlassSettings: Decodable, Sendable {
     var enabled = false
     var transparency = 0.3
@@ -188,6 +200,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
     var fontWeight: String?
     var iconSize: Double?
     var symbolVariant: SymbolVariant?
+    var appIcons: AppIcons?
     var paddingHorizontal: Double?
     var paddingVertical: Double?
     var spacing: Double?
@@ -196,6 +209,9 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
     var maxWidth: Double?
     var shadowRadius: Double?
     var shadowColor: HexColor?
+    var shadowOffsetX: Double?
+    var shadowOffsetY: Double?
+    var shadowFrom: ShadowSource?
     var height: Double?
     var paddingLeading: Double?
     var paddingTrailing: Double?
@@ -206,14 +222,16 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
     var opacity: Double?
     /// Only workspace indicatorStyle consumes placement; ordinary style boxes ignore it.
     var placement: IndicatorPlacement?
+    /// Only workspace cell styles consume show; ordinary style boxes ignore it.
+    var show: CellContent?
     /// Styles that apply over this one while a state is active, keyed by state name.
     var states: [String: WidgetStyle]?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case foreground, background, hoverBackground, borderColor, accent, accentText, borderWidth, borderEdges, cornerRadius, flare
-        case fontName, fontSize, fontWeight, iconSize, symbolVariant, paddingHorizontal, paddingVertical, spacing, width
-        case minWidth, maxWidth, shadowRadius, shadowColor, height, paddingLeading, paddingTrailing, paddingTop
-        case paddingBottom, offsetX, offsetY, opacity, placement, hoverForeground, states
+        case fontName, fontSize, fontWeight, iconSize, symbolVariant, appIcons, paddingHorizontal, paddingVertical, spacing, width
+        case minWidth, maxWidth, shadowRadius, shadowColor, shadowOffsetX, shadowOffsetY, shadowFrom, height, paddingLeading, paddingTrailing, paddingTop
+        case paddingBottom, offsetX, offsetY, opacity, placement, show, hoverForeground, states
     }
 
     var hoverBackground: BackgroundFill? { states?["hover"]?.background }
@@ -235,6 +253,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
             fontWeight: fontWeight ?? defaults.fontWeight,
             iconSize: iconSize ?? defaults.iconSize,
             symbolVariant: symbolVariant ?? defaults.symbolVariant,
+            appIcons: appIcons ?? defaults.appIcons,
             paddingHorizontal: paddingHorizontal ?? defaults.paddingHorizontal,
             paddingVertical: paddingVertical ?? defaults.paddingVertical,
             spacing: spacing ?? defaults.spacing,
@@ -243,6 +262,9 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
             maxWidth: maxWidth ?? defaults.maxWidth,
             shadowRadius: shadowRadius ?? defaults.shadowRadius,
             shadowColor: shadowColor ?? defaults.shadowColor,
+            shadowOffsetX: shadowOffsetX ?? defaults.shadowOffsetX,
+            shadowOffsetY: shadowOffsetY ?? defaults.shadowOffsetY,
+            shadowFrom: shadowFrom ?? defaults.shadowFrom,
             height: height ?? defaults.height,
             paddingLeading: paddingLeading ?? defaults.paddingLeading,
             paddingTrailing: paddingTrailing ?? defaults.paddingTrailing,
@@ -252,6 +274,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
             offsetY: offsetY ?? defaults.offsetY,
             opacity: opacity ?? defaults.opacity,
             placement: placement ?? defaults.placement,
+            show: show ?? defaults.show,
             states: states.map { own in own.merging(defaults.states ?? [:]) { $0.inheriting($1) } } ?? defaults.states
         )
     }
@@ -287,6 +310,7 @@ extension WidgetStyle {
         fontWeight = try values.decodeIfPresent(String.self, forKey: .fontWeight)
         iconSize = try values.decodeIfPresent(Double.self, forKey: .iconSize)
         symbolVariant = try values.decodeIfPresent(SymbolVariant.self, forKey: .symbolVariant)
+        appIcons = try values.decodeIfPresent(AppIcons.self, forKey: .appIcons)
         paddingHorizontal = try values.decodeIfPresent(Double.self, forKey: .paddingHorizontal)
         paddingVertical = try values.decodeIfPresent(Double.self, forKey: .paddingVertical)
         spacing = try values.decodeIfPresent(Double.self, forKey: .spacing)
@@ -295,6 +319,9 @@ extension WidgetStyle {
         maxWidth = try values.decodeIfPresent(Double.self, forKey: .maxWidth)
         shadowRadius = try values.decodeIfPresent(Double.self, forKey: .shadowRadius)
         shadowColor = try values.decodeIfPresent(HexColor.self, forKey: .shadowColor)
+        shadowOffsetX = try values.decodeIfPresent(Double.self, forKey: .shadowOffsetX)
+        shadowOffsetY = try values.decodeIfPresent(Double.self, forKey: .shadowOffsetY)
+        shadowFrom = try values.decodeIfPresent(ShadowSource.self, forKey: .shadowFrom)
         height = try values.decodeIfPresent(Double.self, forKey: .height)
         paddingLeading = try values.decodeIfPresent(Double.self, forKey: .paddingLeading)
         paddingTrailing = try values.decodeIfPresent(Double.self, forKey: .paddingTrailing)
@@ -304,6 +331,7 @@ extension WidgetStyle {
         offsetY = try values.decodeIfPresent(Double.self, forKey: .offsetY)
         opacity = try values.decodeIfPresent(Double.self, forKey: .opacity)
         placement = try values.decodeIfPresent(IndicatorPlacement.self, forKey: .placement)
+        show = try values.decodeIfPresent(CellContent.self, forKey: .show)
         let hoverForeground = try values.decodeIfPresent(HexColor.self, forKey: .hoverForeground)
         let hoverBackground = try values.decodeIfPresent(BackgroundFill.self, forKey: .hoverBackground)
         let explicit = try values.decodeIfPresent([String: WidgetStyle?].self, forKey: .states)?.compactMapValues { $0 }
@@ -360,6 +388,23 @@ extension View {
     func styledSymbolVariant(_ variant: SymbolVariant?) -> some View {
         transformEnvironment(\.symbolVariants) { if let variant { $0 = variant.variants } }
     }
+
+    func styledShadow(_ appearance: WidgetAppearance?) -> some View {
+        modifier(StyledShadow(appearance: appearance))
+    }
+}
+
+private struct StyledShadow: ViewModifier {
+    let appearance: WidgetAppearance?
+    @Environment(\.offscreenSnapshot) private var offscreen
+
+    func body(content: Content) -> some View {
+        // Without an appearance, a clear shadow keeps the view structure: switching branches would rebuild the content.
+        // NSView.cacheDisplay, which draws offscreen snapshots, turns a shadow's vertical offset upside down.
+        let y = appearance?.shadowOffsetY ?? 0
+        content.shadow(color: appearance?.shadowColor ?? .clear, radius: appearance?.shadowRadius ?? 0,
+                       x: appearance?.shadowOffsetX ?? 0, y: offscreen ? -y : y)
+    }
 }
 
 let fontWeights: [(name: String, weight: Font.Weight)] = [
@@ -378,12 +423,16 @@ struct WidgetAppearance {
     let cornerRadius: Double
     let font: Font
     let iconSize: Double
+    let appIcons: AppIcons
     let paddingHorizontal: Double
     let paddingVertical: Double
     let spacing: Double
     let width: CGFloat?
     let shadowRadius: Double
     let shadowColor: Color
+    let shadowOffsetX: Double
+    let shadowOffsetY: Double
+    let shadowFrom: ShadowSource
 
     init(_ style: WidgetStyle, defaults: WidgetStyle) {
         foreground = (style.foreground ?? defaults.foreground)?.color ?? .primary
@@ -395,12 +444,16 @@ struct WidgetAppearance {
         borderWidth = style.borderWidth ?? defaults.borderWidth ?? 1
         cornerRadius = style.cornerRadius ?? defaults.cornerRadius ?? 14
         iconSize = style.iconSize ?? defaults.iconSize ?? 13
+        appIcons = style.appIcons ?? defaults.appIcons ?? .color
         paddingHorizontal = style.paddingHorizontal ?? defaults.paddingHorizontal ?? 10
         paddingVertical = style.paddingVertical ?? defaults.paddingVertical ?? 6
         spacing = style.spacing ?? defaults.spacing ?? 6
         width = (style.width ?? defaults.width).map { CGFloat($0) }
         shadowRadius = style.shadowRadius ?? defaults.shadowRadius ?? 2
         shadowColor = (style.shadowColor ?? defaults.shadowColor)?.color ?? .clear
+        shadowOffsetX = style.shadowOffsetX ?? defaults.shadowOffsetX ?? 0
+        shadowOffsetY = style.shadowOffsetY ?? defaults.shadowOffsetY ?? 1
+        shadowFrom = style.shadowFrom ?? defaults.shadowFrom ?? .content
         let size = style.fontSize ?? defaults.fontSize ?? 13
         let name = style.fontName ?? defaults.fontName ?? "system"
         let weight = fontWeights.first { $0.name == style.fontWeight ?? defaults.fontWeight }?.weight ?? .regular
@@ -408,7 +461,7 @@ struct WidgetAppearance {
     }
 }
 
-enum WidgetPosition: String, Decodable, Sendable, CaseIterable {
+enum WidgetPosition: String, Codable, Sendable, CaseIterable {
     case left, notchLeft, center, notchRight, right
 }
 
@@ -484,7 +537,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     let timeout: Double
     let actions: WidgetActions?
     let enabled: Bool
-    let ownGroup: String?
+    var ownGroup: String?
     /// The group whose `members` the widget joined. A screen's own layout settles it again.
     var joinedGroup: String?
     let priority: Int
@@ -499,6 +552,9 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     }
 
     var group: String? { ownGroup ?? joinedGroup }
+    func movesWith(_ other: WidgetConfiguration) -> Bool {
+        other.id == id || (group != nil && other.group == group && other.position == position)
+    }
     var appMenuDisplayMode: AppMenuDisplayMode {
         guard case let .appMenu(_, displayMode) = content else { return .name }
         return displayMode
@@ -682,11 +738,13 @@ struct BarSettings: Decodable, Sendable {
     var notchSpacing = 16.0
     var fillNotch = false
     var style = WidgetStyle()
+    /// The line between two widgets or groups on one side of the bar, drawn while it has a background.
+    var divider: WidgetStyle?
     var appearance: BarAppearance?
     var glass = GlassSettings()
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case height, displayScale, position, offset, belowMenuBar, margin, keepWindowsClear, keepNotificationsClear, menuBarRevealDelay, hideMenuBar, hidden, hoverDelay, inset, spacing, background, motion, popupTransition, morphPopups, popupOffset, inlineHoverControls, animationDuration, notchWidth, notchSpacing, fillNotch, style, appearance, glass
+        case height, displayScale, position, offset, belowMenuBar, margin, keepWindowsClear, keepNotificationsClear, menuBarRevealDelay, hideMenuBar, hidden, hoverDelay, inset, spacing, background, motion, popupTransition, morphPopups, popupOffset, inlineHoverControls, animationDuration, notchWidth, notchSpacing, fillNotch, style, divider, appearance, glass
     }
 
     init() {}
@@ -727,6 +785,7 @@ struct BarSettings: Decodable, Sendable {
         notchSpacing = try values.decodeIfPresent(Double.self, forKey: .notchSpacing) ?? notchSpacing
         fillNotch = try values.decodeIfPresent(Bool.self, forKey: .fillNotch) ?? fillNotch
         style = try values.decodeIfPresent(WidgetStyle.self, forKey: .style) ?? style
+        divider = try values.decodeIfPresent(WidgetStyle.self, forKey: .divider)
         appearance = try values.decodeIfPresent(BarAppearance.self, forKey: .appearance)
         glass = try values.decodeIfPresent(GlassSettings.self, forKey: .glass) ?? glass
     }
@@ -780,7 +839,7 @@ struct BarSettings: Decodable, Sendable {
 
 struct ScreenConfiguration: Decodable, Sendable {
     static let barKeys: Set<String> = ["height", "position", "offset", "belowMenuBar", "margin", "inset", "spacing", "background", "notchWidth", "notchSpacing", "fillNotch", "style",
-                                       "glass", "appearance", "motion", "popupTransition", "morphPopups", "popupOffset"]
+                                       "divider", "glass", "appearance", "motion", "popupTransition", "morphPopups", "popupOffset"]
     let bar: [String: ConfigurationValue]?
     let layout: [String: [String]]?
     let hasLook: Bool
@@ -954,7 +1013,7 @@ struct Configuration: Decodable, Sendable {
             }
             if let group = widget.group {
                 guard groups[group] != nil else { throw CommandFailure(message: "Unknown group: \(group).") }
-                if let position = groupPositions[group], position != widget.position {
+                if let position = groupPositions[group], position != widget.position, !groups[group]!.takesOthers {
                     throw CommandFailure(message: "Widgets in group \(group) must share a position.")
                 }
                 groupPositions[group] = widget.position

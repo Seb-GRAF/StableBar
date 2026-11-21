@@ -1,4 +1,5 @@
 import SwiftUI
+import Testing
 import XCTest
 @testable import StableBar
 
@@ -55,10 +56,10 @@ final class ThemeCardTests: XCTestCase {
     @MainActor func testSampleBarFillsTheFocusedWorkspaceOnlyForTheBackgroundIndicator() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
-        // Only the accent is magenta, so magenta pixels can only come from the focused workspace's fill.
+        // Only the accent is magenta, and the meter has its own, so magenta pixels can only come from the focused workspace's fill.
         for (indicator, fills) in [(#""indicator":"none","#, false), (#""indicator":"background","#, true), ("", true)] {
             let choice = try fixture.theme(##"""
-            {"defaults":{"foreground":"#ffffff","accent":"#ff00ff","accentText":"#00ff00"},
+            {"defaults":{"foreground":"#ffffff","accent":"#ff00ff","accentText":"#00ff00"},"roles":{"meter":{"accent":"#00ff00"}},
              "workspaceDefaults":{\##(indicator)"style":{"states":{"focused":{"foreground":"#00ff00"}}}}}
             """##, install: false)
             let look = try ThemePreview(choice: choice, themesDirectory: fixture.themes).configuration(for: .dark)
@@ -97,4 +98,67 @@ final class ThemeCardTests: XCTestCase {
             }
         }
     }
+}
+
+@MainActor @Test func sampleBarDrawsTheThemeGroupsAroundTheirMembers() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    // Setup's previews give their own widgets, which can name a group the look doesn't have.
+    let given = try JSONDecoder().decode([StableBar.WidgetConfiguration].self, from: Data(#"""
+        [{ "id": "app", "type": "activeApp", "position": "left" },
+         { "id": "clock", "type": "clock", "position": "right", "group": "pills" }]
+        """#.utf8))
+    // Only the group is magenta, so magenta pixels can only come from sample widgets joining it.
+    for members in [#"[{"type":"clock"}]"#, #"[{"others":true}]"#, #"[{"type":"audio"}]"#] {
+        let choice = try fixture.theme(##"""
+        {"groups":{"time":{"style":{"background":"#ff00ff","paddingHorizontal":6},"members":\##(members)}}}
+        """##, install: false)
+        let look = try ThemePreview(choice: choice, themesDirectory: fixture.themes).configuration(for: .dark)
+        for widgets in [nil, given] {
+            let renderer = ImageRenderer(content: ThemeSampleBar(look: look, widgets: widgets).frame(width: 700))
+            let bitmap = NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+            var groupPixels = 0
+            for y in 0..<bitmap.pixelsHigh {
+                for x in 0..<bitmap.pixelsWide {
+                    if let color = bitmap.colorAt(x: x, y: y), color.alphaComponent > 0.8,
+                       color.redComponent > 0.8 && color.blueComponent > 0.8 && color.greenComponent < 0.2 {
+                        groupPixels += 1
+                    }
+                }
+            }
+            if members.contains("audio") {
+                #expect(groupPixels == 0, "No sample widget joins a group of Sound widgets")
+            } else {
+                #expect(groupPixels > 100, "The sample widgets join a group whose members are \(members)")
+            }
+        }
+    }
+}
+
+/// Cards and setup show the Mac's wallpaper only from where macOS lets StableBar read it without asking.
+@Test func wallpaperIsReadOnlyFromApplesFoldersAndPictures() {
+    let home = URL(filePath: "/Users/someone")
+    for (path, readable) in [
+        ("/System/Library/Desktop Pictures/Sequoia.heic", true),
+        ("/Library/Desktop Pictures/Company.jpg", true),
+        ("/Users/someone/Pictures/Wallpapers/totoro.png", true),
+        ("/Users/someone/Pictures/../Desktop/photo.jpg", false),
+        ("/Users/someone/Pictures/Photos Library.photoslibrary/originals/A/1.heic", false),
+        ("/Users/someone/Desktop/photo.jpg", false),
+        ("/Users/someone/Library/Mobile Documents/com~apple~CloudDocs/photo.jpg", false),
+        ("/System/Volumes/Data/Users/someone/Desktop/photo.jpg", false),
+        ("/Volumes/Backup/photo.jpg", false),
+    ] {
+        #expect(wallpaperReadsWithoutPrompt(URL(filePath: path), home: home) == readable, "\(path)")
+    }
+}
+
+@Test func wallpaperIsNotReadThroughPicturesLinkedToTheDesktop() throws {
+    let home = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    let photo = home.appending(path: "Desktop/photo.jpg")
+    try FileManager.default.createDirectory(at: photo.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data().write(to: photo)
+    try FileManager.default.createSymbolicLink(at: home.appending(path: "Pictures"), withDestinationURL: photo.deletingLastPathComponent())
+    #expect(!wallpaperReadsWithoutPrompt(home.appending(path: "Pictures/photo.jpg"), home: home))
 }

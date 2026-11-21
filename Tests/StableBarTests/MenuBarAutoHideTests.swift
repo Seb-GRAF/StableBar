@@ -98,14 +98,19 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
     return (SetupSession(store: store, system: system), fixture, store, { changes })
 }
 
+/// Without Automation access the macOS menu bar stays, so the bar sits below it, and setup still waits to put it in
+/// the menu bar's place once access is allowed.
 @MainActor
-@Test func setupLeavesTheMenuBarAloneWithoutAutomationAccess() async throws {
+@Test func setupPutsTheBarBelowTheMenuBarWithoutAutomationAccess() async throws {
     let (session, fixture, store, changes) = try setupSession { _ in .denied }
     defer { store.stop(); fixture.close() }
+    #expect(session.preferences.placement == .top)
     await session.place(.top)
     #expect(changes().isEmpty)
     #expect(!session.menuBarHides)
     #expect(session.placementAwaitingAccess == .top)
+    #expect(session.preferences.placement == .belowMenuBar)
+    #expect(store.configuration?.bar.belowMenuBar == true)
     #expect(session.error == nil)
 }
 
@@ -130,27 +135,13 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
 }
 
 @MainActor
-@Test func setupKeepsTheMenuBarChosenWhileMacOSAsks() async throws {
-    let dialog = AutomationDialog()
-    let (session, fixture, store, changes) = try setupSession { asking in asking ? await dialog.ask() : .undecided }
-    defer { store.stop(); fixture.close() }
-    let replace = Task { await session.place(.top) }
-    try #require(await dialog.waitUntilOpen())
-    await session.place(.belowMenuBar)
-    dialog.reply(.allowed)
-    await replace.value
-    #expect(changes().isEmpty)
-    #expect(session.preferences.placement == .belowMenuBar)
-    #expect(session.placementAwaitingAccess == nil)
-}
-
-@MainActor
 @Test func setupHidesTheMenuBarOnceAutomationAccessIsAllowed() async throws {
     var allowed = false
     let (session, fixture, store, changes) = try setupSession { _ in allowed ? .allowed : .denied }
     defer { store.stop(); fixture.close() }
     await session.place(.top)
     #expect(changes().isEmpty)
+    #expect(session.preferences.placement == .belowMenuBar)
     session.refreshAccess()
     for _ in 0..<20 { await Task.yield() }
     #expect(changes().isEmpty)
@@ -167,9 +158,6 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
     let (session, fixture, store, _) = try setupSession(trusted: false) { _ in .allowed }
     defer { store.stop(); fixture.close() }
     let saved = try Data(contentsOf: fixture.url)
-    #expect(session.placement == .top)
-    #expect(session.neededPermissions == [.accessibility, .automation])
-    session.preferences.placement = .belowMenuBar
     #expect(session.neededPermissions == [.accessibility])
     #expect(session.missingPermissions == [.accessibility])
     session.finish()
@@ -179,44 +167,9 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
 }
 
 @MainActor
-@Test func setupNeedsAutomationOnlyToChangeTheMenuBar() async throws {
-    let (session, fixture, store, changes) = try setupSession { _ in .denied }
-    defer { store.stop(); fixture.close() }
-    session.preferences.placement = .belowMenuBar
-    #expect(!session.neededPermissions.contains(.automation))
-    await session.place(.top)
-    #expect(session.missingPermissions == [.automation])
-    await session.place(.belowMenuBar)
-    #expect(session.missingPermissions.isEmpty)
-    #expect(changes().isEmpty)
-
-    let (hidden, hiddenFixture, hiddenStore, _) = try setupSession(menuBarHides: true) { _ in .denied }
-    defer { hiddenStore.stop(); hiddenFixture.close() }
-    hidden.preferences.placement = .top
-    #expect(!hidden.neededPermissions.contains(.automation))
-    hidden.preferences.placement = .belowMenuBar
-    #expect(hidden.missingPermissions == [.automation])
-}
-
-@MainActor
-@Test func setupAllowsAutomationAndAppliesTheWaitingPlacement() async throws {
-    var answer = MenuBarAutoHide.Access.denied
-    let (session, fixture, store, changes) = try setupSession { _ in answer }
-    defer { store.stop(); fixture.close() }
-    await session.place(.top)
-    #expect(session.missingPermissions == [.automation])
-    answer = .allowed
-    await session.allowAutomation()
-    #expect(changes() == [true])
-    #expect(session.neededPermissions == [.accessibility, .automation])
-    #expect(session.missingPermissions.isEmpty)
-}
-
-@MainActor
 @Test func setupNeedsCalendarsForMeetingsUntilSetUpLater() async throws {
     let (session, fixture, store, _) = try setupSession(calendars: .notDetermined) { _ in .allowed }
     defer { store.stop(); fixture.close() }
-    session.preferences.placement = .belowMenuBar
     #expect(!session.neededPermissions.contains(.calendars))
     session.preferences.widgetSets.append(.meetings)
     #expect(session.missingPermissions == [.calendars])
@@ -226,47 +179,24 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
     #expect(session.missingPermissions.isEmpty)
 }
 
-@MainActor
-@Test(arguments: [(#"{"bar":{"belowMenuBar":true},"widgets":[]}"#, SetupPreferences.Placement.belowMenuBar),
-                  (#"{"bar":{"belowMenuBar":true,"offset":8},"widgets":[]}"#, .current),
-                  (#"{"bar":{"offset":0},"widgets":[]}"#, .top),
-                  (#"{"bar":{"offset":12},"widgets":[]}"#, .current)])
-func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreferences.Placement) throws {
-    let (session, fixture, store, _) = try setupSession(configuration: configuration) { _ in .allowed }
-    defer { store.stop(); fixture.close() }
-    #expect(session.placement == placement)
-}
-
-/// Setup used to write the menu bar's height as the offset; such a bar still shows as below the menu bar.
-@MainActor
-@Test func setupShowsAnEarlierBelowMenuBarOffsetAsBelowTheMenuBar() throws {
-    let earlier = max(NSStatusBar.system.thickness, NSScreen.main?.safeAreaInsets.top ?? 0)
-    let (session, fixture, store, _) = try setupSession(configuration: #"{"bar":{"offset":\#(earlier)},"widgets":[]}"#) { _ in .allowed }
-    defer { store.stop(); fixture.close() }
-    #expect(session.placement == .belowMenuBar)
-}
-
 /// Skip setup asks first once something would be lost: a choice, Open at login, or the menu bar setup changed.
 @MainActor
 @Test func setupKnowsWhenSkippingWouldLoseChoices() async throws {
     let (session, fixture, store, _) = try setupSession { _ in .allowed }
     defer { store.stop(); fixture.close() }
     #expect(!session.hasChanges)
-    session.step = 3
+    session.step = .allow
     #expect(!session.hasChanges)
-    session.preferences.theme = .builtIn
+    session.preferences.theme = .package(id: "glass", version: nil)
     #expect(session.hasChanges)
     session.preferences.theme = .current
     #expect(!session.hasChanges)
     session.openAtLogin = true
     #expect(session.hasChanges)
     session.openAtLogin = nil
-    let placement = session.preferences.placement
     await session.place(.top)
-    #expect(session.hasChanges)
-    // place(.top) also changes the placement, so put it back: the hidden menu bar alone is a change.
+    // The bar was already headed for the top edge, so the hidden menu bar alone is a change.
     #expect(session.changedMenuBar)
-    session.preferences.placement = placement
     #expect(session.hasChanges)
 }
 
@@ -288,7 +218,6 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
     defer { skippedStore.stop(); skippedFixture.close() }
     skipped.cancel()
     #expect(SetupProgress.wasSkipped(in: skipped.system.defaults))
-    // The menu bar already hides, so a bar on the top edge needs no Automation access to finish.
     let (finished, finishedFixture, finishedStore, _) = try setupSession(menuBarHides: true) { _ in .allowed }
     defer { finishedStore.stop(); finishedFixture.close() }
     finished.finish()
@@ -303,52 +232,31 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
     #expect(!SetupProgress.offersToFinish(skipped: true, completed: true))
 }
 
-/// Keeping the menu bar turns the starter bar into the one for below the menu bar, live.
+/// A new configuration starts with Everyday. Without it, the stage shows the starter for the menu bar's place, and
+/// without Automation access the starter for below the menu bar, which leaves out what the menu bar shows.
 @MainActor
-@Test func setupKeepingTheMenuBarShowsTheBelowMenuBarStarter() async throws {
+@Test func setupShowsTheStarterForWhereTheBarLands() async throws {
     let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    let starter = try String(contentsOf: repository.appending(path: "Resources/config.json"), encoding: .utf8)
-    let (session, fixture, store, _) = try setupSession(configuration: starter) { _ in .allowed }
-    defer { store.stop(); fixture.close() }
-    await session.place(.belowMenuBar)
-    #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "system-monitor", "sound"])
-    #expect(store.configuration?.workspaceSource == session.workspaceSource)
-    await session.place(.top)
-    #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "sound", "clock", "menu-bar-items"])
-}
-
-/// Preset tiles show what applying the preset adds: below the menu bar only once the configuration says so.
-@MainActor
-@Test(arguments: [(#"{"bar":{"belowMenuBar":true},"widgets":[]}"#, SetupPreferences.Placement.belowMenuBar),
-                  (#"{"bar":{"offset":0},"widgets":[]}"#, .current),
-                  (#"{"bar":{"offset":7},"widgets":[]}"#, .current)])
-func setupsPresetTilesFollowWhatThePresetAdds(configuration: String, placement: SetupPreferences.Placement) throws {
-    let (session, fixture, store, _) = try setupSession(configuration: configuration) { _ in .allowed }
-    defer { store.stop(); fixture.close() }
-    #expect(session.presetPlacement == placement)
-    session.preferences.placement = .top
-    #expect(session.presetPlacement == .top)
-}
-
-/// A bar at the offset earlier setups wrote for Below menu bar shows as below the menu bar in setup, even when its
-/// file says `belowMenuBar: false`, so a preset there leaves out Menu bar items, in its tile and on the bar alike,
-/// without changing the stored placement or the preset's own widgets.
-@MainActor
-@Test func setupPresetsLeaveOutMenuBarItemsAtTheEarlierBelowMenuBarOffset() throws {
-    let offset = max(NSStatusBar.system.thickness, NSScreen.main?.safeAreaInsets.top ?? 0)
-    let bar = #"{"bar":{"offset":\#(offset),"belowMenuBar":false},"widgets":[{"id":"mine","type":"text","position":"left","text":"Hi"}]}"#
-    let (session, fixture, store, _) = try setupSession(configuration: bar) { _ in .allowed }
-    defer { store.stop(); fixture.close() }
-    #expect(session.placement == .belowMenuBar)
-    #expect(session.presetPlacement == .belowMenuBar)
-    session.preset = .minimal
-    session.preferences = SetupPreferences.Preset.minimal.preferences(workspaces: .spaces, placement: session.preferences.placement)
-    #expect(session.preferences.placement == .current)
-    #expect(session.preferences.widgetSets.contains(.menuBarItems))
-    #expect(store.configuration?.widgets.map(\.id).contains("menu-bar-items") == false)
-    session.finish()
-    let saved = try JSONDecoder().decode(Configuration.self, from: Data(contentsOf: fixture.url))
-    #expect(!saved.widgets.map(\.id).contains("menu-bar-items"))
+    var starter = try JSONDecoder().decode([String: ConfigurationValue].self,
+                                           from: Data(contentsOf: repository.appending(path: "Resources/config.json")))
+    // Setup's preview reads with the app's bundled themes, which tests don't have.
+    starter["theme"] = nil
+    let below: [String: ConfigurationValue] = ["bar": .object(["belowMenuBar": .bool(true)]), "workspaceSource": .string("spaces"),
+                                               "widgets": .array(SetupPreferences.belowMenuBarStarter.map(ConfigurationValue.object))]
+    for document in [starter, below] {
+        let (session, fixture, store, changes) = try setupSession(configuration: String(decoding: configurationData(document), as: UTF8.self)) { _ in .denied }
+        defer { store.stop(); fixture.close() }
+        #expect(session.preset == .everyday)
+        #expect(!session.hasChanges)
+        session.toggle(.everyday)
+        #expect(store.configuration?.bar.belowMenuBar == false)
+        #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "sound", "clock", "menu-bar-items"])
+        await session.place(.top)
+        #expect(changes().isEmpty)
+        #expect(store.configuration?.bar.belowMenuBar == true)
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "system-monitor", "sound"])
+        #expect(store.configuration?.workspaceSource == session.workspaceSource)
+    }
 }
 
 /// When the first launch finds no window manager, such as before the login shell's PATH arrives, it writes Spaces
@@ -357,7 +265,7 @@ func setupsPresetTilesFollowWhatThePresetAdds(configuration: String, placement: 
 @MainActor
 @Test(arguments: [(false, "", WorkspaceSource.yabai), (true, "", .spaces), (false, "widget", .spaces), (false, "override", .spaces),
                   (false, "offset", .spaces)])
-func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: String, expected: WorkspaceSource) throws {
+func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: String, expected: WorkspaceSource) async throws {
     let mine: [String: ConfigurationValue] = ["id": .string("mine"), "type": .string("text"), "position": .string("left"), "text": .string("Hi")]
     let widgets = SetupPreferences.belowMenuBarStarter + (change == "widget" ? [mine] : [])
     // What the first launch writes: the starter's bar, below the menu bar, with the starter for that placement.
@@ -368,8 +276,12 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     ]
     if change == "override" { document["widgetOverrides"] = .object(["sound": .object(["priority": .number(5)])]) }
     let json = try #require(String(bytes: JSONEncoder().encode(document), encoding: .utf8))
-    let (session, fixture, store, _) = try setupSession(configuration: json, completed: completed, workspaces: { $0 ?? .yabai }) { _ in .allowed }
+    // Without Automation the bar stays below the menu bar, where the starter keeps its Workspaces.
+    let (session, fixture, store, _) = try setupSession(configuration: json, completed: completed, workspaces: { $0 ?? .yabai }) { _ in .denied }
     defer { store.stop(); fixture.close() }
+    // Keep the starter rather than Everyday, which a new configuration starts with.
+    if session.preset == .everyday { session.toggle(.everyday) }
+    await session.place(.top)
     #expect(session.workspaceSource == expected)
     #expect(store.configuration?.workspaceSource == expected)
     // Finishing saves what the preview showed.
@@ -380,122 +292,59 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     #expect(saved["workspaceSource"] == .string(expected.rawValue))
 }
 
-/// Setup's permissions step checks the Switch to Desktop shortcuts whenever the bar it builds shows macOS Spaces in
+/// Allow checks the Switch to Desktop shortcuts whenever the bar setup builds shows macOS Spaces in
 /// Workspaces, including the starter below the menu bar, which has Workspaces without any preset.
 @MainActor
-@Test func setupExplainsTheDesktopShortcutsForEveryBarWithSpaces() throws {
+@Test func setupExplainsTheDesktopShortcutsForEveryBarWithSpaces() async throws {
     let starter: [String: ConfigurationValue] = ["bar": .object(["belowMenuBar": .bool(true)]), "workspaceSource": .string("spaces"),
                                                  "widgets": .array(SetupPreferences.belowMenuBarStarter.map(ConfigurationValue.object))]
     let json = try #require(String(bytes: JSONEncoder().encode(starter), encoding: .utf8))
-    let (session, fixture, store, _) = try setupSession(configuration: json, workspaces: { _ in .spaces }) { _ in .allowed }
+    let (session, fixture, store, _) = try setupSession(configuration: json, workspaces: { _ in .spaces }) { _ in .denied }
     defer { store.stop(); fixture.close() }
+    session.toggle(.everyday)
+    await session.place(.top)
     #expect(session.showsSpacesGuidance)
     // A bar without Workspaces has no desktops to switch.
     let (plain, plainFixture, plainStore, _) = try setupSession(workspaces: { _ in .spaces }) { _ in .allowed }
     defer { plainStore.stop(); plainFixture.close() }
+    #expect(plain.preset == nil)
     #expect(!plain.showsSpacesGuidance)
     // A preset that adds Workspaces brings the desktops, and the guidance, with it.
-    plain.preferences = SetupPreferences.Preset.developer.preferences(workspaces: .spaces, placement: .current)
+    plain.preferences = SetupPreferences.Preset.developer.preferences(workspaces: .spaces, placement: .top)
     #expect(plain.showsSpacesGuidance)
 }
 
-/// The finishing step's advice follows the source the previewed bar's Workspaces uses, even when setup detected
-/// another manager; a bar without Workspaces keeps the detected manager's advice.
+/// Automation's Allow hides the macOS menu bar live, with the starter for the menu bar's place, and the bar can fly
+/// there once macOS has answered.
 @MainActor
-@Test func setupAdvisesOnTheSourceThePreviewedWorkspacesUse() throws {
-    let bar = #"{"workspaceSource":"spaces","widgets":[{"id":"workspaces","type":"workspaces","position":"left"},{"id":"mine","type":"text","position":"right","text":"Hi"}]}"#
-    let (session, fixture, store, _) = try setupSession(configuration: bar, workspaces: { _ in .yabai }) { _ in .allowed }
-    defer { store.stop(); fixture.close() }
-    #expect(store.configuration?.workspaceSource == .spaces)
-    #expect(session.adviceSource == .spaces)
-    #expect(session.showsSpacesGuidance)
-    let (plain, plainFixture, plainStore, _) = try setupSession(workspaces: { _ in .yabai }) { _ in .allowed }
-    defer { plainStore.stop(); plainFixture.close() }
-    #expect(plain.adviceSource == .yabai)
-    #expect(!plain.showsSpacesGuidance)
-}
-
-/// The intro plays on the first run only, and not with Reduce Motion; a setup reopened later starts at its first step.
-@Test func setupPlaysItsIntroOnTheFirstRunOnly() throws {
-    let defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
-    #expect(SetupProgress.playsIntro(in: defaults, reduceMotion: false))
-    #expect(!SetupProgress.playsIntro(in: defaults, reduceMotion: true))
-    defaults.set(true, forKey: SetupProgress.skippedKey)
-    #expect(!SetupProgress.playsIntro(in: defaults, reduceMotion: false))
-    defaults.removeObject(forKey: SetupProgress.skippedKey)
-    defaults.set(true, forKey: SetupProgress.completedKey)
-    #expect(!SetupProgress.playsIntro(in: defaults, reduceMotion: false))
-}
-
-/// Setup asks for permissions after the choices: placement, the bar's look and the finishing touches go on without
-/// them, and only the permissions step and Try your bar wait until they are allowed.
-@MainActor
-@Test func setupWaitsForPermissionsFromItsPermissionsStepOn() throws {
-    let (session, fixture, store, _) = try setupSession(menuBarHides: true, trusted: false) { _ in .allowed }
-    defer { store.stop(); fixture.close() }
-    #expect(SetupSession.Step.allCases == [.placement, .look, .touches, .permissions, .tryIt])
-    #expect(session.missingPermissions == [.accessibility])
-    for step in SetupSession.Step.allCases {
-        #expect(session.waitsForPermissions(at: step) == (step == .permissions || step == .tryIt))
-    }
-    let (allowed, allowedFixture, allowedStore, _) = try setupSession(menuBarHides: true, trusted: true) { _ in .allowed }
-    defer { allowedStore.stop(); allowedFixture.close() }
-    #expect(!SetupSession.Step.allCases.contains { allowed.waitsForPermissions(at: $0) })
-}
-
-/// Choosing Replace the menu bar on the first step takes effect at once: macOS's menu bar hides, the bar moves to the
-/// top edge with the menu bar starter, and the permissions step lists Automation as allowed.
-@MainActor
-@Test func setupsFirstStepReplacesTheMenuBarLive() async throws {
+@Test func setupsStageReplacesTheMenuBarLive() async throws {
     let starter: [String: ConfigurationValue] = ["bar": .object(["belowMenuBar": .bool(true)]), "workspaceSource": .string("spaces"),
                                                  "widgets": .array(SetupPreferences.belowMenuBarStarter.map(ConfigurationValue.object))]
     let json = try #require(String(bytes: JSONEncoder().encode(starter), encoding: .utf8))
     let (session, fixture, store, changes) = try setupSession(configuration: json) { _ in .allowed }
     defer { store.stop(); fixture.close() }
-    #expect(session.step == SetupSession.Step.placement.rawValue)
-    #expect(session.placement == .belowMenuBar)
+    session.toggle(.everyday)
+    #expect(session.step == .intro)
+    #expect(!session.readyToLand)
+    #expect(changes().isEmpty)
     await session.place(.top)
     #expect(changes() == [true])
     #expect(session.menuBarHides)
+    #expect(session.readyToLand)
     #expect(store.configuration?.bar.belowMenuBar == false)
     #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "sound", "clock", "menu-bar-items"])
-    #expect(session.neededPermissions.contains(.automation))
-    #expect(session.isAllowed(.automation))
-    #expect(!session.waitsForPermissions(at: .permissions))
 }
 
-/// Replace the menu bar has taken effect once the bar goes on the top edge and the macOS menu bar hides, whether
-/// setup hid it or it already was, so the intro's question moves on either way. A choice waiting for Automation
-/// hasn't.
+/// A menu bar that already hides needs no change, so the bar lands at once.
 @MainActor
-@Test func setupKnowsWhenReplacingTheMenuBarTookEffect() async throws {
-    let (hidden, hiddenFixture, hiddenStore, hiddenChanges) = try setupSession(menuBarHides: true) { _ in .allowed }
-    defer { hiddenStore.stop(); hiddenFixture.close() }
-    #expect(!hidden.replacesMenuBar)
-    await hidden.place(.top)
-    #expect(hiddenChanges().isEmpty)
-    #expect(hidden.replacesMenuBar)
-    let (refused, refusedFixture, refusedStore, _) = try setupSession { _ in .denied }
-    defer { refusedStore.stop(); refusedFixture.close() }
-    await refused.place(.top)
-    #expect(!refused.replacesMenuBar)
-}
-
-/// The first step selects neither choice and waits until the person picks one, so nobody moves on with whatever
-/// placement the bar happened to have. The intro's question counts as the choice.
-@MainActor
-@Test func setupWaitsForAPlacementChoiceOnItsFirstStep() async throws {
-    let (session, fixture, store, _) = try setupSession(menuBarHides: true) { _ in .allowed }
+@Test func setupLandsAtOnceWhenTheMenuBarAlreadyHides() async throws {
+    let (session, fixture, store, changes) = try setupSession(menuBarHides: true) { _ in .denied }
     defer { store.stop(); fixture.close() }
-    #expect(session.placementChoice == nil)
-    #expect(session.blocksContinue(at: .placement))
-    #expect(!session.blocksContinue(at: .look))
-    #expect(!session.blocksContinue(at: .touches))
-    await session.place(.belowMenuBar)
-    #expect(session.placementChoice == .belowMenuBar)
-    #expect(!session.blocksContinue(at: .placement))
+    #expect(!session.readyToLand)
     await session.place(.top)
-    #expect(session.placementChoice == .top)
+    #expect(changes().isEmpty)
+    #expect(session.placementAwaitingAccess == nil)
+    #expect(session.readyToLand)
 }
 
 /// Holds a call to macOS open until the test answers it.
@@ -517,25 +366,43 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     }
 }
 
-/// Continue on the first step also waits until the choice takes effect, so nobody moves on to presets for a placement
-/// the bar doesn't have: not while macOS asks for Automation access, nor once it's refused. Choosing what needs no
-/// change to the menu bar moves on.
+/// The bar stays on the stage while macOS asks for Automation access, and lands below the menu bar once it's refused.
 @MainActor
-@Test func setupWaitsOnItsFirstStepUntilTheChoiceTakesEffect() async throws {
+@Test func setupLandsOnceMacOSAnswersForAutomation() async throws {
     let question = HeldCall<MenuBarAutoHide.Access>()
     let (session, fixture, store, changes) = try setupSession { asking in asking ? await question.wait() : .undecided }
     defer { store.stop(); fixture.close() }
     let replace = Task { await session.place(.top) }
     for _ in 0..<100 where !question.started { await Task.yield() }
     try #require(question.started)
-    #expect(session.blocksContinue(at: .placement))
+    #expect(!session.readyToLand)
     question.answer(.denied)
     await replace.value
     #expect(session.placementAwaitingAccess == .top)
-    #expect(session.blocksContinue(at: .placement))
-    await session.place(.belowMenuBar)
+    #expect(session.preferences.placement == .belowMenuBar)
+    #expect(session.readyToLand)
     #expect(changes().isEmpty)
-    #expect(!session.blocksContinue(at: .placement))
+}
+
+/// The bar stays on the stage until Accessibility is allowed in System Settings, which setup checks again while it
+/// shows.
+@MainActor
+@Test func setupLandsOnceAccessibilityIsAllowed() async throws {
+    let fixture = try ThemeGalleryFixture(#"{"widgets":[]}"#)
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
+    store.configurationStore.reloadConfiguration()
+    defer { store.stop(); fixture.close() }
+    var trusted = false
+    let system = SetupSystem(automationAccess: { _ in .allowed }, setMenuBarHidden: { _ in }, menuBarHides: { true },
+                             isTrusted: { trusted }, calendarAccess: { .fullAccess },
+                             defaults: UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!)
+    let session = SetupSession(store: store, system: system)
+    await session.place(.top)
+    #expect(!session.readyToLand)
+    trusted = true
+    #expect(!session.readyToLand)
+    session.pollAccessibility()
+    #expect(session.readyToLand)
 }
 
 /// Skip setup while setup is still hiding the menu bar: the menu bar ends as it was before setup, and the discarded
@@ -647,16 +514,14 @@ private struct TimedOut: Error {}
     #expect(session.error == nil)
 }
 
-/// Continue waits on the first step while setup shows the menu bar change failing, even when the change took effect.
+/// A menu bar change that fails leaves the macOS menu bar showing, so the bar lands below it and setup says why.
 @MainActor
-@Test func aFailedMenuBarChangeKeepsTheFirstStepWaiting() async throws {
-    var hides = true
-    let (session, fixture, store) = try setupSession(changing: { hidden in
-        hides = hidden
-        throw TimedOut()
-    }, hides: { hides })
+@Test func aFailedMenuBarChangePutsTheBarBelowTheMenuBar() async throws {
+    let (session, fixture, store) = try setupSession(changing: { _ in throw TimedOut() }, hides: { false })
     defer { store.stop(); fixture.close() }
-    await session.place(.belowMenuBar)
+    await session.place(.top)
     #expect(session.error != nil)
-    #expect(session.blocksContinue(at: .placement))
+    #expect(!session.menuBarHides)
+    #expect(session.preferences.placement == .belowMenuBar)
+    #expect(session.readyToLand)
 }

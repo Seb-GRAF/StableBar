@@ -59,7 +59,7 @@ Keep the active app, calendar, system stats and playback controls in reach. Widg
 
 <p><img src="docs/images/readme-themes.gif" width="100%" alt="The same bar changes through the included themes while the screen and wallpaper stay still."></p>
 
-Choose from Built-in and six bundled themes, or save your own.
+Choose from seven included themes, get more from the Store, or save your own.
 
 <p><img src="docs/images/readme-edit.gif" width="100%" alt="The pointer opens Edit Bar in Place, drags Now Playing beside the notch and clicks Done."></p>
 
@@ -112,7 +112,7 @@ Change content, appearance and behavior in Settings, with undo and redo. Or edit
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/Seb-GRAF/StableBar/main/stablebar.schema.json",
-  "theme": { "id": "catppuccin" },
+  "theme": { "id": "clear" },
   "widgets": [
     { "id": "spaces", "type": "workspaces", "position": "left" },
     { "id": "app", "type": "activeApp", "position": "left" },

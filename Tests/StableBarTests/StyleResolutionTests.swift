@@ -267,10 +267,13 @@ private func workspace(_ json: String) throws -> WorkspaceConfiguration {
 
 @Test func workspaceAndUnderlineStatesComeFromTheStatesMap() throws {
     let configuration = try workspace(##"""
-    {"style":{"states":{"focused":{"foreground":"#111111"}}},"focusedStyle":{"foreground":"#222222","background":"#333333"},
+    {"style":{"show":"none","states":{"focused":{"foreground":"#111111","show":"both"}}},"focusedStyle":{"foreground":"#222222","background":"#333333"},
      "indicator":"underline","indicatorStyle":{"height":2,"background":"#444444","states":{"visible":{"background":"#555555"}}}}
     """##)
     #expect(configuration.cellStyle(.focused).resting.foreground == HexColor(0x111111ff))
+    #expect(configuration.cellStyle(.focused).resting.show == .both)
+    #expect(configuration.cellStyle(.visible).resting.show == CellContent.none)
+    #expect(configuration.cellStyle(nil).label(hovered: true).show == CellContent.none)
     #expect(configuration.cellStyle(.focused).resting.background == .color(HexColor(0x333333ff)))
     #expect(configuration.cellStyle(.focused).underline.background == .color(HexColor(0x444444ff)))
     #expect(configuration.cellStyle(.visible).underline.background == .color(HexColor(0x555555ff)))
@@ -499,5 +502,16 @@ private func rules(_ json: String) throws -> [StyleRule] {
     for name in names {
         let matches = pattern.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
         #expect(matches == (SymbolVariant(rawValue: name) != nil), "\(name)")
+    }
+}
+
+@MainActor @Test func tintedAppIconsReadTheTextColorOnTheSurfaceItSitsOn() {
+    // Swiss's muted grays sit on its bar, and Tonal's text in the focused workspace on its accent's fill.
+    let muted = HexColor(light: 0x8c8c8cff, dark: 0x808080ff)
+    let onAccent = HexColor(light: 0xffffffff, dark: 0x5d180aff)
+    for (color, scheme, light) in [(muted, ColorScheme.light, false), (muted, .dark, true), (onAccent, .light, true), (onAccent, .dark, false)] {
+        var environment = EnvironmentValues()
+        environment.colorScheme = scheme
+        #expect(readsLight(color.color.resolve(in: environment), in: scheme) == light)
     }
 }

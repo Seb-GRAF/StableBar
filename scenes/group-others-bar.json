@@ -1,0 +1,23 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "defaults": { "background": null, "borderColor": null, "shadowColor": null },
+    "groupDefaults": { "background": "#8e8e9333", "cornerRadius": 12, "paddingHorizontal": 4 },
+    "groups": {
+      "clock": { "style": { "background": "#0a84ff", "foreground": "#ffffff" }, "members": [{ "type": "clock" }] },
+      "more": { "members": [{ "others": true }] },
+      "mine": { "style": { "background": "#30d15840" } }
+    },
+    "widgets": [
+      { "id": "focus", "type": "text", "text": "Focus", "icon": "moon.fill", "position": "right" },
+      { "id": "weather", "type": "text", "text": "18°", "icon": "cloud.sun.fill", "position": "right" },
+      { "id": "note", "type": "text", "text": "Own group", "position": "right", "group": "mine" },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "right" },
+      { "id": "project", "type": "text", "text": "StableBar", "position": "left" },
+      { "id": "gap", "type": "spacer", "position": "left" },
+      { "id": "task", "type": "text", "text": "Review", "position": "left" }
+    ]
+  },
+  "draw": "bar",
+  "width": 700
+}

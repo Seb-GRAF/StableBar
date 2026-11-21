@@ -151,13 +151,15 @@ struct PopupShadowView: View {
     let cornerRadius: Double
     let color: Color
     let radius: Double
+    let x: Double
+    let y: Double
     let inset: CGFloat
 
     var body: some View {
         Canvas { context, size in
             let shape = RoundedRectangle(cornerRadius: cornerRadius).path(in: CGRect(origin: .zero, size: size).insetBy(dx: inset, dy: inset))
             var shadow = context
-            shadow.addFilter(.shadow(color: color, radius: radius, y: 1))
+            shadow.addFilter(.shadow(color: color, radius: radius, x: x, y: y))
             shadow.fill(shape, with: .color(.black))
             // A translucent popup would show the shape through it.
             context.blendMode = .clear

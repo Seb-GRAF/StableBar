@@ -3,9 +3,13 @@ import SwiftUI
 struct ThemeCard: View {
     let title: String
     let look: Configuration?
+    var description: String?
     var appearance: BarAppearance = .light
     var isSelected = false
     var isEdited = false
+    /// Draws the two ends of the sample bar side by side at real size, without its middle, and the battery's popup under
+    /// them, instead of the whole bar at half.
+    var showsBarEndsAndPopup = false
     var progress: String?
     var error: String?
     var isStore = false
@@ -18,6 +22,7 @@ struct ThemeCard: View {
     let select: () -> Void
     @State private var hovering = false
     @State private var confirmingDelete = false
+    @State private var barWidth: CGFloat = 0
 
     var body: some View {
         Group {
@@ -89,9 +94,17 @@ struct ThemeCard: View {
             }
             .frame(height: 20)
             .padding(.horizontal, 2)
+            if let description {
+                Text(description)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2, reservesSpace: true)
+                    .padding(.horizontal, 2)
+                    .padding(.top, -5)
+            }
         }
         .padding(EdgeInsets(top: 6, leading: 6, bottom: 8, trailing: 6))
-        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 11))
         .overlay {
             RoundedRectangle(cornerRadius: 11)
@@ -104,12 +117,34 @@ struct ThemeCard: View {
 
     private var preview: some View {
         Group {
-            if let look {
+            if let look, showsBarEndsAndPopup {
                 GeometryReader { proxy in
+                    // The clock at the right end is wider than the workspaces at the left.
+                    HStack(spacing: 10) {
+                        end(of: look, alignment: .leading).frame(width: (proxy.size.width - 10) * 0.4)
+                        end(of: look, alignment: .trailing)
+                    }
+                    .frame(height: 60)
+                }
+                .overlay(alignment: .topTrailing) {
+                    popup(of: look)
+                        .scaleEffect(0.6, anchor: .topTrailing)
+                        .padding(.top, 30 + ThemeSampleBar(look: look).stripHeight / 2 + look.bar.popupOffset)
+                        .padding(.trailing, look.bar.margin + look.bar.inset)
+                }
+            } else if let look {
+                GeometryReader { proxy in
+                    let scale = min(0.5, proxy.size.width / barWidth)
                     ThemeSampleBar(look: look)
-                        .frame(width: proxy.size.width * 2)
-                        .scaleEffect(0.5)
+                        .frame(width: proxy.size.width / scale)
+                        .scaleEffect(scale)
                         .frame(width: proxy.size.width, height: proxy.size.height)
+                        .background {
+                            ThemeSampleBar(look: look)
+                                .fixedSize()
+                                .hidden()
+                                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
+                        }
                 }
             } else {
                 Text(isStore && error == nil ? "Loading preview…" : "Preview unavailable")
@@ -117,18 +152,69 @@ struct ThemeCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(height: 46)
+        .frame(height: showsBarEndsAndPopup ? 190 : 46)
         .background(SampleWallpaper())
         .clipShape(RoundedRectangle(cornerRadius: 7))
         .environment(\.colorScheme, appearance.colorScheme)
         .accessibilityHidden(true)
     }
+
+    /// The battery's popup in `look`, with sample data.
+    private func popup(of look: Configuration) -> some View {
+        let popup = EssentialsPopup.battery.popup(timeZone: nil)
+        let style = popup.baseStyle(widget: ThemeSampleBar.sampleWidgets.first { $0.id == "battery" }!,
+                                    defaults: look.popupDefaults.popupStyle(over: look.defaults))
+        let resolved = style.resolved(for: StyleStates())
+        let appearance = WidgetAppearance(resolved, defaults: WidgetStyle(spacing: PopupConfiguration.blockSpacing))
+        return PopupBlockView(block: popup.layout, inheritedStyle: style, fields: ["percent": "82", "state": "battery", "timeRemaining": "312"],
+                              context: BlockContext(values: ["percent": 0.82], roles: look.roles, open: { _ in }, runAction: { _, _ in }),
+                              topLevel: true)
+            .padding(.horizontal, appearance.paddingHorizontal)
+            .padding(.vertical, appearance.paddingVertical)
+            .frame(width: popup.style.width.map { CGFloat($0) })
+            .modifier(PopupBackground(style: resolved, glass: look.bar.glass, backgrounds: PopupBackgrounds()))
+            .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+    }
+
+    /// The end of the sample bar on `alignment`'s side, fading out toward the middle.
+    private func end(of look: Configuration, alignment: Alignment) -> some View {
+        ThemeSampleBar(look: look)
+            .fixedSize()
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: alignment)
+            .clipped()
+            .mask {
+                LinearGradient(stops: [.init(color: .black, location: 0.75), .init(color: .clear, location: 1)],
+                               startPoint: alignment == .leading ? .leading : .trailing,
+                               endPoint: alignment == .leading ? .trailing : .leading)
+            }
+    }
 }
 
 struct ThemeSampleBar: View {
     let look: Configuration
-    /// The widgets to draw with sample data, in their places, instead of workspaces, Finder, a battery and the time.
+    /// The widgets to draw with sample data, in their places, instead of `sampleWidgets`. They join the look's groups by
+    /// its members, and leave their own, which the look may not have.
     let widgets: [WidgetConfiguration]?
+    /// Built-in widgets that need no permission, which join a theme's groups as on the bar.
+    static let sampleWidgets = try! JSONDecoder().decode([WidgetConfiguration].self, from: Data(#"""
+        [
+          { "id": "workspaces", "type": "workspaces", "position": "left" },
+          { "id": "app", "type": "activeApp", "position": "left" },
+          {
+            "id": "system", "type": "system", "position": "right",
+            "layout": {
+              "type": "row", "style": { "spacing": 6 },
+              "children": [
+                { "type": "text", "text": "CPU", "role": "key", "style": { "fontWeight": "medium" } },
+                { "type": "field", "field": "text" },
+                { "type": "progress", "source": "cpu", "height": 4, "role": "meter", "style": { "width": 32 } }
+              ]
+            }
+          },
+          { "id": "battery", "type": "battery", "position": "right" },
+          { "id": "clock", "type": "clock", "position": "right", "format": "EEE d MMM  HH:mm" }
+        ]
+        """#.utf8))
 
     var barStyle: WidgetStyle { look.bar.style.resolved(for: StyleStates()) }
     var stripHeight: Double { max(0, look.bar.height - 2 * look.bar.margin) }
@@ -141,20 +227,18 @@ struct ThemeSampleBar: View {
     }
 
     var body: some View {
+        let ungrouped = (widgets ?? Self.sampleWidgets).map { widget in
+            var widget = widget
+            widget.ownGroup = nil
+            return widget
+        }
+        let units = BarUnit.make(widgets: WidgetGroupConfiguration.joining(ungrouped, groups: look.groups), groups: look.groups)
         HStack(spacing: look.bar.spacing) {
-            if let widgets {
-                ForEach(widgets.filter { $0.position == .left }, content: sample)
-                Spacer(minLength: 0)
-                ForEach(widgets.filter { [.notchLeft, .center, .notchRight].contains($0.position) }, content: sample)
-                Spacer(minLength: 0)
-                ForEach(widgets.filter { $0.position == .right }, content: sample)
-            } else {
-                workspaces(active: 1)
-                tile(role: .primary) { Text("Finder") }
-                Spacer(minLength: 0)
-                tile(role: .value) { battery }
-                tile(role: .time) { Text("9:41") }
-            }
+            run(units.filter { $0.position == .left })
+            Spacer(minLength: 0)
+            run([WidgetPosition.notchLeft, .center, .notchRight].flatMap { position in units.filter { $0.position == position } })
+            Spacer(minLength: 0)
+            run(units.filter { $0.position == .right })
         }
         .lineLimit(1)
         .padding(.horizontal, look.bar.inset)
@@ -170,8 +254,8 @@ struct ThemeSampleBar: View {
         .allowsHitTesting(false)
     }
 
-    func workspaces(active: Int) -> some View {
-        let style = look.defaults.resolved(for: StyleStates())
+    func workspaces(active: Int, group: WidgetStyle) -> some View {
+        let style = resolveStyle([look.defaults, group])
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let focused = workspace?.cellStyle(.focused) ?? WorkspaceCellStyle()
         let underline = focused.underline
@@ -197,12 +281,24 @@ struct ThemeSampleBar: View {
         let cell = workspace?.cellStyle(focused ? .focused : .empty) ?? WorkspaceCellStyle()
         let style = cell.resting
         let underline = cell.underline
-        let label = Text("\(number)")
+        let show = style.show ?? .both
+        let label = HStack {
+            if show == .both || show == .label { Text("\(number)") }
+        }
             .font(WidgetAppearance(style, defaults: look.defaults).font)
             .foregroundStyle(style.foreground?.color ?? (focused ? appearance.accentText : appearance.foreground))
             .padding(.leading, style.paddingLeading ?? style.paddingHorizontal ?? 7)
             .padding(.trailing, style.paddingTrailing ?? style.paddingHorizontal ?? 7)
             .frame(width: style.width.map { CGFloat($0) }, height: style.height.map { CGFloat($0) })
+            .background {
+                if workspace?.indicator == .cells {
+                    let shape = RoundedRectangle(cornerRadius: style.cornerRadius ?? max(appearance.cornerRadius - 4, 0))
+                    shape.fill(style.background?.shapeStyle ?? AnyShapeStyle(Color.clear))
+                        .overlay {
+                            if let border = style.borderColor { shape.strokeBorder(border.color, lineWidth: style.borderWidth ?? 1) }
+                        }
+                }
+            }
             .overlay(alignment: .bottom) {
                 if focused && workspace?.indicator == .underline && underline.placement != .belowBar {
                     RoundedRectangle(cornerRadius: underline.cornerRadius ?? 0)
@@ -223,13 +319,32 @@ struct ThemeSampleBar: View {
             }
     }
 
-    @ViewBuilder private func sample(_ widget: WidgetConfiguration) -> some View {
+    /// Units that sit side by side, with a divider in the gap between two of them, as on the bar.
+    private func run(_ units: [BarUnit]) -> some View {
+        ForEach(units.indices, id: \.self) { index in
+            unit(units[index]).overlay(alignment: .leading) {
+                if let divider = look.bar.divider, divider.background != nil, index > 0, !units[index].isSpacer, !units[index - 1].isSpacer {
+                    BarDividerLine(divider: divider).offset(x: -(look.bar.spacing + (divider.width ?? 1)) / 2)
+                }
+            }
+        }
+    }
+
+    private func unit(_ unit: BarUnit) -> some View {
+        BarUnitSurface(style: unit.style ?? WidgetStyle(), defaults: look.defaults, spacing: look.bar.spacing) {
+            ForEach(unit.widgets) { sample($0, group: look.groupStyle(of: $0)) }
+        }
+        .fixedSize()
+    }
+
+    @ViewBuilder private func sample(_ widget: WidgetConfiguration, group: WidgetStyle = WidgetStyle()) -> some View {
         if widget.content == .workspaces {
-            workspaces(active: 1)
+            workspaces(active: 1, group: group)
         } else {
-            let style = resolveStyle([look.defaults, look.roleStyle(widget.role), widget.barStyle])
-            WidgetSampleContent(widget: widget, inheritedStyle: style.inheritedByBlocks)
+            let style = resolveStyle([look.defaults, look.roleStyle(widget.role), group, widget.barStyle])
+            WidgetSampleContent(widget: widget, inheritedStyle: style.inheritedByBlocks, roles: look.roles)
                 .modifier(ThemeSampleTile(style: style))
+                .layoutPriority(1)
         }
     }
 
@@ -258,11 +373,14 @@ private struct ThemeSampleTile: ViewModifier {
             .padding(.trailing, style.paddingTrailing ?? appearance.paddingHorizontal)
             .padding(.top, verticalPadding ? style.paddingTop ?? appearance.paddingVertical : 0)
             .padding(.bottom, verticalPadding ? style.paddingBottom ?? appearance.paddingVertical : 0)
-            .background(appearance.background, in: RoundedRectangle(cornerRadius: appearance.cornerRadius))
+            .background {
+                RoundedRectangle(cornerRadius: appearance.cornerRadius).fill(appearance.background)
+                    .styledShadow(appearance.shadowFrom == .shape ? appearance : nil)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: appearance.cornerRadius)
                     .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
             }
-            .shadow(color: appearance.shadowColor, radius: appearance.shadowRadius, y: 1)
+            .styledShadow(appearance.shadowFrom == .content ? appearance : nil)
     }
 }

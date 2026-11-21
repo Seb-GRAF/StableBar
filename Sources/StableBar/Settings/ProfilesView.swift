@@ -10,7 +10,7 @@ struct ProfilesView: View {
     @State private var editingJSON = false
     @State private var hovered: String?
     @State private var deleting: String?
-    @State private var themeOptions = [ProfileThemeOption(id: "built-in", name: "Built-in")]
+    @State private var themeOptions: [ProfileThemeOption] = []
     @State private var network: String?
     @State private var locationAccess = false
     /// Reads the Wi-Fi network, camera and microphone for every profile while the page shows: the bar reads them only

@@ -1,0 +1,216 @@
+{
+  "tokens": {
+    "surface": {
+      "light": "#f2ecdc",
+      "dark": "#1f1f28"
+    },
+    "surfaceRaised": {
+      "light": "#e7e0cc",
+      "dark": "#2a2a37"
+    },
+    "text": {
+      "light": "#3a3a4a",
+      "dark": "#dcd7ba"
+    },
+    "textMuted": {
+      "light": "#74736a",
+      "dark": "#807f76"
+    },
+    "accent": {
+      "light": "#6b6433",
+      "dark": "#c8c093"
+    },
+    "track": {
+      "light": "#d6ceb4",
+      "dark": "#363646"
+    },
+    "hairline": {
+      "light": "#c9c2ab",
+      "dark": "#54546d"
+    },
+    "warning": {
+      "light": "#b35b00",
+      "dark": "#ff9e3b"
+    },
+    "critical": {
+      "light": "#c84053",
+      "dark": "#e46876"
+    },
+    "onAccent": {
+      "light": "#1f1f28",
+      "dark": "#1f1f28"
+    },
+    "fill": {
+      "light": "#545464",
+      "dark": "#c8c093"
+    },
+    "focus": {
+      "light": "#bfb47f",
+      "dark": "#c8c093"
+    }
+  },
+  "bar": {
+    "height": 24,
+    "margin": 0,
+    "inset": 4,
+    "spacing": 1,
+    "style": {
+      "background": "@token.surface",
+      "cornerRadius": 0
+    },
+    "divider": {
+      "background": "@token.hairline",
+      "height": 14
+    }
+  },
+  "defaults": {
+    "foreground": "@token.text",
+    "background": null,
+    "hoverBackground": "@token.surfaceRaised",
+    "borderColor": null,
+    "shadowColor": null,
+    "accent": "@token.fill",
+    "accentText": "@token.surface",
+    "cornerRadius": 0,
+    "fontName": "Menlo",
+    "fontSize": 11,
+    "fontWeight": "regular",
+    "iconSize": 11,
+    "paddingHorizontal": 10,
+    "paddingVertical": 0,
+    "height": 20,
+    "spacing": 5,
+    "states": {
+      "open": {
+        "background": "@token.surfaceRaised"
+      },
+      "warning": {
+        "foreground": "@token.warning",
+        "accent": "@token.warning"
+      },
+      "critical": {
+        "background": "@token.critical",
+        "foreground": "@token.surface",
+        "accent": "@token.surface",
+        "states": {
+          "hover": {
+            "background": "@token.critical"
+          }
+        }
+      },
+      "active": {
+        "foreground": "@token.fill"
+      },
+      "muted": {
+        "foreground": "@token.textMuted"
+      }
+    },
+    "appIcons": "tinted"
+  },
+  "roles": {
+    "time": {
+      "foreground": "@token.text"
+    },
+    "primary": {
+      "foreground": "@token.text"
+    },
+    "secondary": {
+      "foreground": "@token.textMuted"
+    },
+    "heading": {
+      "fontSize": 14,
+      "fontWeight": "bold"
+    },
+    "key": {
+      "foreground": "@token.textMuted"
+    },
+    "value": {
+      "foreground": "@token.text"
+    },
+    "button": {
+      "background": "@token.focus",
+      "foreground": "@token.onAccent",
+      "cornerRadius": 2,
+      "paddingHorizontal": 10,
+      "paddingVertical": 5,
+      "states": {
+        "hover": {
+          "background": "@token.text",
+          "foreground": "@token.surface"
+        }
+      }
+    },
+    "meter": {
+      "accent": "@token.fill",
+      "background": "@token.track",
+      "cornerRadius": 0
+    },
+    "slider": {
+      "accent": "@token.fill",
+      "background": "@token.track",
+      "cornerRadius": 2,
+      "height": 18
+    },
+    "separator": {
+      "foreground": "#00000000",
+      "background": "@token.hairline",
+      "height": 1
+    }
+  },
+  "popupDefaults": {
+    "foreground": "@token.text",
+    "background": "@token.surface",
+    "borderColor": "@token.hairline",
+    "borderWidth": 1,
+    "cornerRadius": 4,
+    "shadowColor": {
+      "light": "#3a3a4a33",
+      "dark": "#00000099"
+    },
+    "shadowRadius": 16,
+    "accent": "@token.fill",
+    "accentText": "@token.surface",
+    "fontName": "Menlo",
+    "fontSize": 12,
+    "paddingHorizontal": 14,
+    "paddingVertical": 12,
+    "spacing": 10,
+    "states": {
+      "hover": {
+        "background": "@token.surfaceRaised"
+      }
+    }
+  },
+  "workspaceDefaults": {
+    "indicator": "background",
+    "style": {
+      "foreground": "@token.text",
+      "fontName": "Menlo",
+      "fontSize": 11,
+      "height": 14,
+      "cornerRadius": 2,
+      "paddingHorizontal": 4,
+      "spacing": 3,
+      "states": {
+        "hover": {
+          "foreground": "@token.fill"
+        },
+        "focused": {
+          "background": "@token.focus",
+          "foreground": "@token.onAccent"
+        },
+        "visible": {
+          "borderColor": "@token.textMuted",
+          "borderWidth": 1
+        },
+        "empty": {
+          "foreground": "@token.textMuted"
+        }
+      }
+    },
+    "appStyle": {
+      "width": 12,
+      "height": 12
+    }
+  }
+}

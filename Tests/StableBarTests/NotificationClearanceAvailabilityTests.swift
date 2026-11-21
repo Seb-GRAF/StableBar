@@ -41,50 +41,6 @@ import Testing
     (view as? NSSwitch).map { [$0] } ?? view.subviews.flatMap(notificationSwitches)
 }
 
-@Test(arguments: [14, 15, 26, 27]) @MainActor
-func setupOffersNotificationClearanceOnlyOnSupportedMacOS(major: Int) async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "notification-setup-\(UUID().uuidString)")
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let store = try notificationStore(in: directory)
-    defer { store.stop() }
-    var system = SetupSystem()
-    system.macOSVersion = MacOSVersion(major: major)
-    // Never reach System Events, the menu bar setting or login items from a test.
-    system.automationAccess = { _ in .allowed }
-    system.setMenuBarHidden = { _ in }
-    system.setOpenAtLogin = { _ in }
-    system.menuBarHides = { true }
-    system.isTrusted = { true }
-    system.calendarAccess = { .fullAccess }
-    system.hasBattery = { false }
-    system.isInApplications = { true }
-    system.loginStatus = { .notRegistered }
-    system.defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
-    system.workspaceSource = { _ in .spaces }
-    // Keep the windows switch at its saved value whatever runs on this Mac: only notifications are counted here.
-    system.windowManagerRuns = { true }
-    system.previewsOnTheBar = false
-    let session = SetupSession(store: store, system: system)
-    session.step = SetupSession.Step.touches.rawValue
-    // A dotfile shared with a newer Mac still loads its saved value on the older-version path.
-    #expect(store.configurationError == nil)
-    #expect(store.configurationWarning == nil)
-    #expect(session.base?.bar.keepNotificationsClear == true)
-    #expect(session.preferences.keepNotificationsClear == nil)
-    let view = SetupTourView(session: session, display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil),
-                             menuBarHeight: { 0 }, dock: 0, intro: false, finish: {}, skip: {}, reveal: {}, lower: {}, showProfile: nil)
-    #expect(view.clearanceStartNotice == (major >= 26
-        ? "Window and notification clearance start when you finish setup."
-        : "Window clearance starts when you finish setup."))
-    // Windows and Open at login are always offered. Only notifications has a saved true value.
-    let count = major >= 26 ? 3 : 2
-    try await inspectNotificationControls(view, ready: { notificationSwitches(in: $0).count == count }) { host in
-        let toggles = notificationSwitches(in: host)
-        #expect(toggles.filter { $0.state == .on }.count == (major >= 26 ? 1 : 0))
-        #expect(session.preferences.keepNotificationsClear == nil)
-    }
-}
-
 @Test(arguments: [14, 15, 26, 27], [false, true]) @MainActor
 func settingsNotificationClearanceShowsTheSavedValueAndAvailability(major: Int, configured: Bool) async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: "notification-settings-\(UUID().uuidString)")

@@ -59,6 +59,7 @@ struct MenuBarItemsView: View {
                 Image(systemName: icon).font(.system(size: appearance.iconSize))
             } else {
                 Image(nsImage: item.entry.icon!).resizable().scaledToFit().frame(height: appearance.iconSize)
+                    .styledAppIcon(item.entry.icon!.isTemplate ? .color : appearance.appIcons, color: appearance.foreground)
             }
         }
         .accessibilityLabel(item.entry.title)

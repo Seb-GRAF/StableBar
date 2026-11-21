@@ -114,7 +114,7 @@ private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
     #expect(store.configuration?.bar.height == 40)
 }
 
-@Test func profileThemeOptionsListBuiltInFirstAndEachThemeOnce() throws {
+@Test func profileThemeOptionsListTheIncludedThemesThenEachInstalledThemeOnce() throws {
     let fixture = try ThemeGalleryFixture()
     defer { fixture.close() }
     _ = try fixture.theme(#"{"bar":{"margin":2}}"#)
@@ -126,15 +126,12 @@ private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
 
     let options = ThemeCatalog(packages: fixture.directory.appending(path: "packages"), themesDirectory: fixture.themes)
         .profileThemeOptions
-    #expect(options.first == ProfileThemeOption(id: "built-in", name: "Built-in"))
-    #expect(options.filter { $0.id == "built-in" }.count == 1)
-    #expect(options.filter { $0.id == "test-theme" } == [ProfileThemeOption(id: "test-theme", name: "Test theme")])
-    #expect(options.contains { $0.id == "nord" })
+    #expect(options.map(\.id) == ["clear", "glass", "tonal", "slim", "dot", "gloss", "sticker", "test-theme"])
+    #expect(options.last == ProfileThemeOption(id: "test-theme", name: "Test theme"))
 
     let withoutBundled = ThemeCatalog(packages: fixture.directory.appending(path: "packages"), themesDirectory: nil)
         .profileThemeOptions
-    #expect(withoutBundled == [ProfileThemeOption(id: "built-in", name: "Built-in"),
-                               ProfileThemeOption(id: "test-theme", name: "Test theme")])
+    #expect(withoutBundled == [ProfileThemeOption(id: "test-theme", name: "Test theme")])
 }
 
 @MainActor @Test func choosingAThemeConditionSavesItAsOneUndoableChange() throws {

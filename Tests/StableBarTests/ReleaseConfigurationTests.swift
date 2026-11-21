@@ -28,6 +28,7 @@ func everyReleasedStarterConfigurationStillLoads(_ name: String) throws {
     try migrateStarterAppleLogo(fixture.url)
     try migrateEarlierColors(fixture.url)
     try migrateEarlierBelowMenuBarOffset(fixture.url, offsets: [22, 24])
+    try migrateRetiredThemes(fixture.url, pinned: nil, themes: fixture.themes, storeThemes: fixture.storeThemes)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
     store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)

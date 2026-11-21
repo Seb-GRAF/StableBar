@@ -74,7 +74,7 @@ final class ThemeTrialPanelTests: XCTestCase {
         XCTAssertEqual(panel.frame.midX, bar.frame.midX, accuracy: 1)
         XCTAssertFalse(panel.isVisible)
         XCTAssertTrue(controller.handle(try key(123, panel: panel)))
-        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 0)
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 6)
         let outside = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
                                                      windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
         XCTAssertFalse(controller.handle(outside))
@@ -91,14 +91,14 @@ final class ThemeTrialPanelTests: XCTestCase {
         XCTAssertFalse(controller.handle(try key(123, panel: panelAgain, modifiers: .command)))
         XCTAssertTrue(controller.handle(try key(123, panel: panelAgain)))
         XCTAssertTrue(controller.handle(try key(36, panel: panelAgain)))
-        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("phosphor")]))
+        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("sticker")]))
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         controller.show(store: store, bar: bar, screen: screen)
         let next = try XCTUnwrap(presented)
         XCTAssertTrue(controller.handle(try key(124, panel: next)))
-        XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 0)
+        XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 6)
         XCTAssertTrue(controller.handle(try key(53, panel: next)))
-        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 0)
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 6)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
     }
 

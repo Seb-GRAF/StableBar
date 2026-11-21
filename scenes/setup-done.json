@@ -1,0 +1,148 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "theme": {
+      "id": "clear"
+    },
+    "widgets": [
+      {
+        "id": "apple",
+        "type": "appleMenu",
+        "position": "left"
+      },
+      {
+        "id": "app-menu",
+        "type": "appMenu",
+        "position": "left"
+      },
+      {
+        "id": "sound",
+        "type": "audio",
+        "position": "right"
+      },
+      {
+        "id": "battery",
+        "type": "battery",
+        "position": "right",
+        "details": true,
+        "layout": {
+          "type": "row",
+          "children": [
+            {
+              "type": "battery"
+            },
+            {
+              "type": "field",
+              "field": "text"
+            }
+          ]
+        }
+      },
+      {
+        "id": "date",
+        "type": "clock",
+        "position": "right",
+        "format": "EEE d MMM",
+        "role": "secondary",
+        "details": true
+      },
+      {
+        "id": "clock",
+        "type": "clock",
+        "position": "right",
+        "format": "HH:mm",
+        "role": "time",
+        "details": true
+      },
+      {
+        "id": "menu-bar-items",
+        "type": "menuBarItems",
+        "position": "right"
+      }
+    ]
+  },
+  "outputs": {
+    "audio": {
+      "text": "45%",
+      "icon": "speaker.wave.2.fill",
+      "value": 0.45,
+      "fields": {
+        "volumeAvailable": "true",
+        "muted": "false",
+        "volume": "45",
+        "device": "MacBook Pro Speakers"
+      },
+      "values": {
+        "volume": 0.45
+      }
+    },
+    "battery": {
+      "text": "82%",
+      "icon": "battery.75percent",
+      "values": {
+        "percent": 0.82
+      },
+      "fields": {
+        "percent": "82",
+        "state": "battery",
+        "present": "true",
+        "health": "normal",
+        "timeRemaining": "285"
+      }
+    }
+  },
+  "activeApp": "com.apple.Safari",
+  "draw": "setup",
+  "setup": {
+    "step": "done",
+    "preset": "everyday",
+    "menuBarHides": true,
+    "storeWidgets": [
+      {
+        "id": "now-playing",
+        "name": "Now playing",
+        "version": "1.2.2",
+        "description": "Shows the playing or paused track from Music or Spotify, with previous, play/pause and next controls.",
+        "symbol": "music.note",
+        "archive": "now-playing-1.2.2.tar.gz",
+        "sha256": "69a3996232ac5cf3a32691ac68ca1da60cd958fbcd75e327242acc6557a21acd"
+      },
+      {
+        "id": "weather",
+        "name": "Weather",
+        "version": "1.0.3",
+        "description": "Shows the current temperature and conditions from wttr.in, with feels-like, humidity, wind and today's high and low.",
+        "symbol": "cloud.sun",
+        "archive": "weather-1.0.3.tar.gz",
+        "sha256": "6a1beca92f0bd02afd3784e24b7838656a78ea6d4d6efab13ec6bb843d95b271"
+      },
+      {
+        "id": "dev-servers",
+        "name": "Development servers",
+        "version": "1.0.2",
+        "description": "Lists your listening TCP ports and their processes, with actions to open localhost or stop a process.",
+        "symbol": "server.rack",
+        "archive": "dev-servers-1.0.2.tar.gz",
+        "sha256": "a675761310c4bf9f6736d7b768777b6f3f6be0f83ff4cc0e3518d3ab6c73dddb"
+      },
+      {
+        "id": "ai-usage",
+        "name": "AI usage",
+        "version": "1.4.0",
+        "description": "Shows your Claude Code and Codex limits in one widget, with reset countdowns and weekly pace, using the sign-ins those tools already keep.",
+        "symbol": "gauge.medium",
+        "archive": "ai-usage-1.4.0.tar.gz",
+        "sha256": "2fc2e86aeb6053844a27d3b753c9a7cf468bd64252e7a09b682bc41132467689"
+      },
+      {
+        "id": "dock-badges",
+        "name": "Dock badges",
+        "version": "1.1.1",
+        "description": "Shows the total unread count from running apps' Dock badges, with a popup that opens each app.",
+        "symbol": "app.badge",
+        "archive": "dock-badges-1.1.1.tar.gz",
+        "sha256": "487fb81704f7390fcf68d8acf9f8dfa929c5dcb289924f6fefcd9bd3b56cb37f"
+      }
+    ]
+  }
+}

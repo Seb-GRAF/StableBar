@@ -18,7 +18,7 @@ enum WidgetPlacement {
                            groups: [String: WidgetGroupConfiguration]) -> BarEditInsertion? {
         guard let moving = widgets.first(where: { $0.id == id }) else { return nil }
         let remaining = widgets.filter {
-            $0.position == position && $0.id != id && (moving.group == nil || $0.group != moving.group)
+            $0.position == position && !moving.movesWith($0)
         }
         let units = BarUnit.make(widgets: remaining, groups: groups)
         var index = 0
@@ -55,7 +55,7 @@ enum WidgetPlacement {
 
     static func insertionIndex(at position: WidgetPosition, before anchor: String?, widgets: [WidgetConfiguration]) -> Int {
         if let target = widgets.first(where: { $0.id == anchor && $0.position == position }) {
-            return widgets.firstIndex { $0.id == target.id || (target.group != nil && $0.group == target.group) }!
+            return widgets.firstIndex(where: target.movesWith)!
         }
         return widgets.lastIndex { $0.position == position }.map { $0 + 1 } ?? widgets.endIndex
     }
@@ -76,14 +76,15 @@ enum WidgetPlacement {
         guard let widget = widgets.first(where: { $0.id == id }) else {
             throw CommandFailure(message: "This widget is no longer available.")
         }
-        let moves = { (other: WidgetConfiguration) in other.id == id || (widget.group != nil && other.group == widget.group) }
+        let moves = widget.movesWith
         let section = widgets.filter { $0.position == widget.position && (moves($0) || listed($0)) }
-        let indices = section.indices.filter { moves(section[$0]) }
-        guard let start = indices.first, let end = indices.last else { return widgets }
+        guard let start = section.firstIndex(where: moves) else { return widgets }
         if offset < 0, start > 0 { return try arrangement(moving: id, to: widget.position, before: section[start - 1].id, widgets: widgets) }
-        if offset > 0, end + 1 < section.count {
-            let next = section[end + 1]
-            let following = section.dropFirst(end + 2).first { next.group == nil || $0.group != next.group }
+        // A pill draws at its first member, and one that takes others can have a spacer between its members.
+        let after = { (other: WidgetConfiguration) in !moves(other) && section.firstIndex(where: other.movesWith)! > start }
+        if offset > 0, let nextIndex = section[start...].firstIndex(where: after) {
+            let next = section[nextIndex]
+            let following = section[(nextIndex + 1)...].first { after($0) && (next.group == nil || $0.group != next.group) }
             return try arrangement(moving: id, to: widget.position, before: following?.id, widgets: widgets)
         }
         return widgets
@@ -94,7 +95,7 @@ enum WidgetPlacement {
         guard let widget = widgets.first(where: { $0.id == id }) else {
             throw CommandFailure(message: "This widget is no longer available.")
         }
-        let moving = widgets.filter { $0.id == id || (widget.group != nil && $0.group == widget.group) }
+        let moving = widgets.filter(widget.movesWith)
         let movingIDs = Set(moving.map(\.id))
         if let anchor, movingIDs.contains(anchor), moving.allSatisfy({ $0.position == position }) { return widgets }
         var remaining = widgets.filter { !movingIDs.contains($0.id) }

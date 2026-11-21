@@ -52,6 +52,7 @@ struct WidgetsView: View {
 
     private var store: BarStore { editor.store }
     private var widgets: [WidgetConfiguration] { store.configuration?.onScreen(screen).widgets ?? [] }
+    private var groups: [String: WidgetGroupConfiguration] { store.configuration?.onScreen(screen).groups ?? [:] }
     private var kinds: [ScreenKind] { ScreenKind.allCases.filter { store.configurationStore.screenSetup?.kinds.contains($0) == true } }
     private var screen: ScreenKind { kinds.contains(editor.barScreen) ? editor.barScreen : kinds.first ?? editor.barScreen }
     private var selectedWidget: String? { editor.barItem == .widget ? editor.selectedID : nil }
@@ -136,9 +137,9 @@ struct WidgetsView: View {
                                 .accessibilityLabel("Add a widget to \(position.title)")
                                 .popover(isPresented: addPopover(shown: addingAt == position), arrowEdge: .trailing) { addPopoverContent }
                             }
-                            ForEach(BarUnit.make(widgets: section, groups: store.configuration?.groups ?? [:])) { unit in
+                            ForEach(BarUnit.make(widgets: section, groups: groups)) { unit in
                                 if let group = unit.widgets[0].group {
-                                    groupRow(group, members: unit.widgets, position: position, listed: shown, grouping: grouping)
+                                    groupRow(group, id: unit.id, members: unit.widgets, position: position, listed: shown, grouping: grouping)
                                     if !collapsedGroups.contains(group) {
                                         ForEach(unit.widgets) { widget in
                                             widgetRow(widget, name: names[widget.id] ?? widget.id, position: position, listed: shown,
@@ -197,7 +198,10 @@ struct WidgetsView: View {
                     }
                 }
                 .onChange(of: selectedGroup, initial: true) {
-                    if let selectedGroup { proxy.scrollTo("group:\(selectedGroup)") }
+                    if let selectedGroup, let unit = BarUnit.make(widgets: shown, groups: groups)
+                        .first(where: { $0.widgets[0].group == selectedGroup }) {
+                        proxy.scrollTo(unit.id)
+                    }
                 }
             }
             Divider()
@@ -231,7 +235,7 @@ struct WidgetsView: View {
             .padding(.bottom, 4)
     }
 
-    private func groupRow(_ group: String, members: [WidgetConfiguration], position: WidgetPosition, listed: [WidgetConfiguration],
+    private func groupRow(_ group: String, id: String, members: [WidgetConfiguration], position: WidgetPosition, listed: [WidgetConfiguration],
                           grouping: WidgetGrouping) -> some View {
         let selected = selectedGroup == group
         let first = members[0]
@@ -267,7 +271,7 @@ struct WidgetsView: View {
             .accessibilityHidden(true)
         }
         .overlay(alignment: .top) { insertionLine(position.rawValue + "/" + first.id) }
-        .id("group:\(group)")
+        .id(id)
         .contextMenu {
             Button("Move up") { moveBy(-1, id: first.id, listed: listed) }
             Button("Move down") { moveBy(1, id: first.id, listed: listed) }
@@ -328,7 +332,7 @@ struct WidgetsView: View {
                     .disabled(!grouping.canLeave(widget.id))
                 Divider()
             } else {
-                let choices = grouping.choices(for: widget.id, among: listed)
+                let choices = grouping.choices(for: widget.id, among: listed, groups: groups)
                 ForEach(choices, id: \.self) { choice in
                     Button(choice.title(names: names)) { editor.group(widget.id, choice) }
                 }
@@ -418,7 +422,7 @@ struct WidgetsView: View {
     private func dropKey(_ position: WidgetPosition, before anchor: String? = nil) -> String {
         let target = widgets.first { $0.id == anchor }
         let first = target.flatMap { target in
-            widgets.first { $0.id == target.id || (target.group != nil && $0.group == target.group) }?.id
+            widgets.first(where: target.movesWith)?.id
         }
         return position.rawValue + "/" + (first ?? "")
     }

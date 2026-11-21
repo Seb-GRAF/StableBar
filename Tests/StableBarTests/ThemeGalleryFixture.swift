@@ -9,6 +9,7 @@ struct ThemeGalleryFixture {
         URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appending(path: "Resources/themes")
     }
+    var storeThemes: URL { themes.deletingLastPathComponent().appending(path: "store-themes") }
 
     init(_ json: String = #"{"widgets":[]}"#) throws {
         directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)

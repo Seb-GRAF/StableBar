@@ -242,6 +242,10 @@ struct BarInspector: View {
                                    values: (try? values["style"]?.decoded([String: ConfigurationValue].self)) ?? [:],
                                    set: { setBar(["style": .object($0)], on: target) },
                                    unset: { unsetBar(["style": .object($0)], on: target) })
+        let divider = StyleFields(store: store, path: bar.path + ".divider", defaultsPath: barOnScreen ? "bar.divider" : nil,
+                                  values: (try? values["divider"]?.decoded([String: ConfigurationValue].self)) ?? [:],
+                                  set: { setBar(["divider": .object($0)], on: target) },
+                                  unset: { unsetBar(["divider": .object($0)], on: target) })
         if kinds.count > 1 || store.configuration?.screenLooks[screen.rawValue] != nil {
             SettingsSegments(selection: $barOnScreen, options: [(false, "Every screen"), (true, screen.screenTitle)], stretches: false)
                 .fixedSize()
@@ -249,7 +253,7 @@ struct BarInspector: View {
         }
         switch editor.barTab {
         case .look:
-            BarLookSection(editor: editor, bar: bar, style: barStyle)
+            BarLookSection(editor: editor, bar: bar, style: barStyle, divider: divider)
             SettingsCallout(systemImage: "arrow.left.and.right",
                             text: Text("Drag a label or a **↔** handle to change a value; hold Shift for steps of 10. The preview and your real bar follow as you drag."))
                 .padding(.top, 12)
@@ -364,6 +368,7 @@ struct BarInspector: View {
             style.hoverBackground("Hover background")
             style.color("Border color", "borderColor")
             style.color("Accent", "accent")
+            style.choice("App icons", "appIcons", choices: AppIcons.allCases.map(\.rawValue), default: AppIcons.color.rawValue)
         }
         SettingsGroup("Text") {
             style.font(fontFamilies)

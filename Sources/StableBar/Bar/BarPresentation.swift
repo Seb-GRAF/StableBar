@@ -42,11 +42,15 @@ final class BarPresentation {
         let mode = modePresentation
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let screenOverrides = configuration.screenLooks.mapValues { OrderedStyleOverrides(widgets: $0.widgets, output: output) }
-        let screenWidgets = configuration.screenLooks.mapValues { look in Dictionary(uniqueKeysWithValues: look.widgets.map { ($0.id, $0) }) }
+        // A screen's own layout can also change which group a widget joins, and so its text color.
+        let screens = ScreenKind.allCases.filter { configuration.screenLooks[$0.rawValue] != nil || configuration.screenLayouts[$0.rawValue] != nil }
+        let screenWidgets = Dictionary(uniqueKeysWithValues: screens.map { kind in
+            (kind, Dictionary(uniqueKeysWithValues: configuration.onScreen(kind).widgets.map { ($0.id, $0) }))
+        })
         for widget in configuration.widgets {
             let script = store.widgetScripts.scripts[widget.id]
             let base = resolveStyle(widgetStyleLayers(widget, defaults: configuration.defaults, overrides: overrides, own: script?.output,
-                                                      role: configuration.roleStyle(widget.role)))
+                                                      role: configuration.roleStyle(widget.role), group: configuration.groupStyle(of: widget)))
             let usesMode = base.usesModeStates || configuration.usesSliderModeStates(widget) || widget.layout?.usesModeStates(roles: configuration.roles) == true
                 || widget.hoverLayout?.usesModeStates(roles: configuration.roles) == true
                 || widget.overlay?.usesModeStates(roles: configuration.roles) == true
@@ -59,17 +63,18 @@ final class BarPresentation {
             default: false
             }
             var screenStyles: [String: ResolvedWidgetStyle] = [:]
-            for (kind, look) in configuration.screenLooks {
+            for kind in screens {
                 guard let own = screenWidgets[kind]![widget.id] else { continue }
-                let base = resolveStyle(widgetStyleLayers(own, defaults: look.defaults, overrides: screenOverrides[kind]!, own: script?.output,
-                                                          role: look.roleStyle(own.role)))
+                let look = configuration.look(on: kind)
+                let base = resolveStyle(widgetStyleLayers(own, defaults: look.defaults, overrides: screenOverrides[kind.rawValue] ?? overrides, own: script?.output,
+                                                          role: look.roleStyle(own.role), group: look.groupStyle(of: own)))
                 let screenStates = widgetDataStates(script?.output, widget: own, providers: configuration.providers)
                 let screenUsesMode = usesMode || base.usesModeStates || look.usesSliderModeStates(own)
                     || own.layout?.usesModeStates(roles: look.roles) == true
                     || own.hoverLayout?.usesModeStates(roles: look.roles) == true
                     || own.overlay?.usesModeStates(roles: look.roles) == true
-                screenStyles[kind] = ResolvedWidgetStyle(base: base, state: screenStates.widget, parts: screenStates.parts,
-                                                         mode: screenUsesMode ? modePresentation(on: ScreenKind(rawValue: kind)!) : ModePresentation())
+                screenStyles[kind.rawValue] = ResolvedWidgetStyle(base: base, state: screenStates.widget, parts: screenStates.parts,
+                                                                  mode: screenUsesMode ? modePresentation(on: kind) : ModePresentation())
             }
             presentations[widget.id]?.update(style: ResolvedWidgetStyle(base: base, state: states.widget, parts: states.parts,
                                                                         mode: usesMode ? mode : ModePresentation()),

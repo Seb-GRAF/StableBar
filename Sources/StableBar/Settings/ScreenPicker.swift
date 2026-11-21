@@ -201,7 +201,7 @@ private struct ScreenThumbnail: View {
         let notched = kind.display.notch != nil
         Button(action: select) {
             VStack(spacing: 4) {
-                Wallpaper()
+                SampleWallpaper()
                     .overlay(alignment: .top) {
                         HStack(spacing: 2) {
                             blocks([.left, .notchLeft])

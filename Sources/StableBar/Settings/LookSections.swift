@@ -20,6 +20,7 @@ struct WidgetsLookSection: View {
         style.color("Shadow color", "shadowColor")
         style.color("Accent", "accent")
         style.color("Accent text color", "accentText")
+        style.choice("App icons", "appIcons", choices: AppIcons.allCases.map(\.rawValue), default: AppIcons.color.rawValue)
         style.font(fontFamilies)
         style.weight()
         style.number("Text size", "fontSize", default: 13, in: 6...40, slider: true)
@@ -45,10 +46,12 @@ struct GroupsLookSection: View {
 
     @ViewBuilder var rows: some View {
         LightDarkHeader()
+        style.color("Text color", "foreground")
         style.color("Background", "background")
         style.color("Border color", "borderColor").disabled(flared)
         style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5,
                      hint: flared ? "A group with a flare draws no border" : nil).disabled(flared)
+        style.color("Shadow color", "shadowColor")
         style.number("Corner radius", "cornerRadius", default: 0, in: 0...40, slider: true)
         style.number("Flare", "flare", default: 0, in: 0...30, slider: true, hint: "Curves the top corners outward, like the notch")
         style.number("Horizontal padding", "paddingHorizontal", default: 0, in: 0...30, slider: true)
@@ -92,13 +95,14 @@ struct PopupsLookSection: View {
     }
 }
 
-/// `bar` sets the bar's size and margin, `style` its background and border.
+/// `bar` sets the bar's size and margin, `style` its background and border, `divider` the line between its widgets.
 struct BarLookSection: View {
     let editor: ConfigurationEditor
     let bar: StyleFields
     let style: StyleFields
+    let divider: StyleFields
 
-    var paths: [String] { [style.path] + ["height", "inset", "spacing", "margin"].map { "\(bar.path).\($0)" } }
+    var paths: [String] { [style.path, divider.path] + ["height", "inset", "spacing", "margin"].map { "\(bar.path).\($0)" } }
 
     var body: some View {
         LookSection(title: "Bar", editor: editor, paths: paths) { rows }
@@ -117,6 +121,9 @@ struct BarLookSection: View {
         bar.number("Height", "height", default: 40, in: 16...100, slider: true)
         bar.number("Side inset", "inset", default: 12, in: 0...100)
         bar.number("Space between widgets", "spacing", default: 8, in: 0...50)
+        divider.color("Divider color", "background")
+        divider.number("Divider width", "width", default: 1, in: 0...6, step: 0.5)
+        divider.number("Divider height", "height", default: 16, in: 0...100, slider: true)
         bar.number("Margin", "margin", default: 0, in: 0...40, hint: "Floats the bar in from the screen edges")
     }
 }

@@ -116,8 +116,9 @@ enum PackageSourceError: LocalizedError, Equatable {
 /// Only that source can install other versions of the ID, so another source can't substitute the package.
 /// Versions an author installed from a folder under a source's ID are listed apart: they're the folder's files, not the source's.
 struct PackageInstallRecord: Codable, Equatable, Sendable {
-    /// Why a package was installed from no source: Save as Theme, a theme link, or the look of a bar link.
-    enum Origin: String, Codable, Sendable { case saved, themeLink, barLink }
+    /// Why a package was installed from no source: Save as Theme, a theme link, the look of a bar link, or a retired theme
+    /// that an update kept.
+    enum Origin: String, Codable, Sendable { case saved, themeLink, barLink, retired }
 
     static let fileName = ".source.json"
     /// Opened from a folder: the ID is unclaimed, and the first source to install it claims it.

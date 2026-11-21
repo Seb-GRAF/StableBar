@@ -188,17 +188,17 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
     {
       "configuration": { "widgets": [] },
       "draw": "setup",
-      "setup": { "step": "permissions", "placement": "belowMenuBar", "preset": "developer", "menuBarHides": true,
-                 "accessibility": false, "automation": false, "calendars": false, "battery": false, "notch": false }
+      "setup": { "step": "allow", "preset": "developer", "menuBarHides": true,
+                 "accessibility": false, "automation": false, "calendars": false, "battery": false }
     }
     """#)
     #expect(decoded.draw == .setup)
-    #expect(decoded.setup == SceneFile.Setup(step: .permissions, placement: .belowMenuBar, preset: .developer, menuBarHides: true,
-                                             accessibility: false, automation: false, calendars: false, battery: false, notch: false))
+    #expect(decoded.setup == SceneFile.Setup(step: .allow, preset: .developer, menuBarHides: true,
+                                             accessibility: false, automation: false, calendars: false, battery: false))
     let plain = try scene(#"{"configuration": {"widgets": []}, "draw": "setup", "setup": {}}"#)
     #expect(plain.setup == SceneFile.Setup())
-    #expect(SceneFile.Setup() == SceneFile.Setup(step: .placement, placement: nil, preset: nil, menuBarHides: false,
-                                                 accessibility: true, automation: true, calendars: true, battery: true, notch: true))
+    #expect(SceneFile.Setup() == SceneFile.Setup(step: .intro, preset: nil, menuBarHides: false,
+                                                 accessibility: true, automation: true, calendars: true, battery: true, storeWidgets: nil))
     #expect(try scene(#"{"configuration": {"widgets": []}, "draw": "setup"}"#).setup == nil)
 }
 
@@ -217,16 +217,16 @@ func sceneDecodesApplicationMoveRows(state: SceneFile.ApplicationMove) throws {
         try scene(#"{"configuration":{},"draw":"setup","applicationMove":"\#(state.rawValue)"}"#)
     }
     #expect(throws: (any Error).self) {
-        try scene(#"{"configuration":{},"draw":"setup","setup":{"step":"touches"},"applicationMove":"\#(state.rawValue)"}"#)
+        try scene(#"{"configuration":{},"draw":"setup","setup":{"step":"done"},"applicationMove":"\#(state.rawValue)"}"#)
     }
 }
 
 @Test(arguments: [
     #""draw": "setup", "setup": {"stage": "look"}"#,
-    #""draw": "setup", "setup": {"step": "intro"}"#,
-    #""draw": "setup", "setup": {"placement": "current"}"#,
+    #""draw": "setup", "setup": {"step": "tune"}"#,
+    #""draw": "setup", "setup": {"step": "tryIt"}"#,
     #""draw": "setup", "setup": {"preset": "gaming"}"#,
-    #""draw": "bar", "setup": {"step": "look"}"#,
+    #""draw": "bar", "setup": {"step": "choose"}"#,
 ])
 func sceneRejectsASetupItCannotDraw(json: String) {
     #expect(throws: (any Error).self) { try scene(#"{"configuration": {"widgets": []}, \#(json)}"#) }
@@ -257,18 +257,7 @@ func sceneRejectsASetupItCannotDraw(json: String) {
     }
     #expect(Set(setupProperties.keys) == Set(SceneFile.Setup.CodingKeys.allCases.map(\.stringValue)))
     #expect(choices(setupProperties["step"]) == Set(SetupSession.Step.allCases.map { "\($0)" }))
-    #expect(choices(setupProperties["placement"]) == ["top", "belowMenuBar", "bottom"])
     #expect(choices(setupProperties["preset"]) == Set(SetupPreferences.Preset.allCases.map { "\($0)" }))
-    #expect(choices(setupProperties["workspaceCheck"]) == Set(SceneFile.Setup.WorkspaceCheck.allCases.map(\.rawValue)))
-}
-
-@Test(arguments: SceneFile.Setup.WorkspaceCheck.allCases)
-func sceneStubsWorkspaceChecks(result: SceneFile.Setup.WorkspaceCheck) throws {
-    let decoded = try scene(#"{"configuration": {}, "draw": "setup", "setup": {"workspaceCheck": "\#(result.rawValue)"}}"#)
-    #expect(decoded.setup?.workspaceCheck == result)
-    #expect(throws: (any Error).self) {
-        try scene(#"{"configuration": {}, "draw": "setup", "setup": {"workspaceCheck": "failed"}}"#)
-    }
 }
 
 @Test @MainActor func everySceneInTheRepositoryLoads() throws {

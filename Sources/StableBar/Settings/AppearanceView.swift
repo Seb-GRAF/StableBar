@@ -32,10 +32,6 @@ struct AppearanceView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         header
                         scopeLine
-                        if let configuration = store.configuration {
-                            ThemePreviewStrip(look: screen.map(configuration.onScreen) ?? configuration, appearance: appearance)
-                                .padding(.top, 12).padding(.bottom, 4)
-                        }
                         themes(appearance)
                         if screen == nil, editor.editingProfile == nil, !gallery.linkedThemeIsActive, let theme = gallery.selectedChoice {
                             ThemeEditsLine(editor: editor, theme: theme).padding(.top, 12)
@@ -195,7 +191,9 @@ struct AppearanceView: View {
             ForEach(sections, id: \.title) { section in
                 Text(section.title).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(.secondary)
                     .padding(.top, 8).padding(.horizontal, 2)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                let columns = section.title == "Included" ? Array(repeating: GridItem(.flexible(), spacing: 10), count: 2)
+                    : [GridItem(.adaptive(minimum: 150), spacing: 10)]
+                LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(section.items) { card($0, appearance: appearance) }
                 }
             }
@@ -217,7 +215,7 @@ struct AppearanceView: View {
     private var gallerySections: [(title: String, items: [ThemeItem])] {
         let installed = gallery.choices.onePerTheme(keeping: Set([gallery.selectedKey] + (screenTheme.map { [$0.key] } ?? [])))
             .filter { !$0.isBundled }
-        let isYours = { (choice: ThemeChoice) in [.installed, .local, .saved, .themeLink, .barLink].contains(gallery.source(of: choice)) }
+        let isYours = { (choice: ThemeChoice) in [.installed, .local, .saved, .themeLink, .barLink, .retired].contains(gallery.source(of: choice)) }
         let yours = installed.filter(isYours)
         let fromSources = installed.filter { !isYours($0) }.map(ThemeItem.installed)
             + gallery.storeThemes.map(ThemeItem.store)
@@ -231,15 +229,17 @@ struct AppearanceView: View {
         switch item {
         case let .installed(choice):
             let selected = screenTheme.map { $0.enabled ? $0.key : "built-in" } ?? gallery.selectedKey
-            return ThemeCard(title: choice.title, look: look, appearance: appearance, isSelected: selected == choice.key,
-                             isEdited: gallery.editedThemes.contains(choice.manifest.id),
+            return ThemeCard(title: choice.title, look: look, description: choice.manifest.description, appearance: appearance,
+                             isSelected: selected == choice.key,
+                             isEdited: gallery.editedThemes.contains(choice.manifest.id), showsBarEndsAndPopup: choice.isBundled,
                              progress: gallery.progress[item.id], error: gallery.error(for: item.id), source: gallery.source(of: choice),
                              showInFinder: choice.isBundled ? nil : { NSWorkspace.shared.activateFileViewerSelecting([choice.directory]) },
                              delete: choice.isBundled ? nil : { Task { await gallery.delete(choice) } }, inUse: themesInUse.contains(choice.key)) {
                 gallery.select(choice, on: screen, everyBar: editor.themeChangesEveryBar)
             }
         case let .store(entry):
-            return ThemeCard(title: entry.name, look: look, appearance: appearance, progress: gallery.progress[item.id],
+            return ThemeCard(title: entry.name, look: look, description: entry.description, appearance: appearance,
+                             progress: gallery.progress[item.id],
                              error: gallery.error(for: item.id), isStore: true,
                              source: entry.sourceID == PackageSource.storeID ? nil : .privateSource(gallery.sourceName(entry.sourceID))) {
                 Task { await gallery.get(entry, on: screen, everyBar: editor.themeChangesEveryBar) }
@@ -282,7 +282,8 @@ struct AppearanceView: View {
                                        spacing: editor.fields(["popupDefaults"], on: screen, values: editor.values("popupDefaults", on: screen)),
                                        bar: barFields, fontFamilies: fontFamilies)
         let barLook = BarLookSection(editor: editor, bar: barFields,
-                                     style: editor.fields(["bar", "style"], on: screen, values: (try? bar["style"]?.decoded([String: ConfigurationValue].self)) ?? [:]))
+                                     style: editor.fields(["bar", "style"], on: screen, values: (try? bar["style"]?.decoded([String: ConfigurationValue].self)) ?? [:]),
+                                     divider: editor.fields(["bar", "divider"], on: screen, values: (try? bar["divider"]?.decoded([String: ConfigurationValue].self)) ?? [:]))
         let workspaces = editor.fields(["workspaceDefaults"], on: screen, values: editor.values("workspaceDefaults", on: screen))
         let glass = editor.fields(["bar", "glass"], on: screen, values: (try? bar["glass"]?.decoded([String: ConfigurationValue].self)) ?? [:])
         let roles = editor.fields(["roles"], on: screen, values: [:])
@@ -339,24 +340,6 @@ struct AppearanceView: View {
         do { try store.removePropertySource(source, everyBar: editor.themeChangesEveryBar) }
         catch { store.customizationHistory.error = errorMessage(error) }
     }
-}
-
-struct ThemePreviewStrip: View {
-    let look: Configuration
-    let appearance: BarAppearance
-
-    var body: some View {
-        ThemeSampleBar(look: look)
-            .background(SampleWallpaper())
-            .clipShape(RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(SettingsPalette.groupBorder))
-            .environment(\.colorScheme, appearance.colorScheme)
-            .accessibilityHidden(true)
-    }
-}
-
-struct SampleWallpaper: View {
-    var body: some View { Wallpaper() }
 }
 
 /// One of Customize's sections, with the selected theme's edits in it.

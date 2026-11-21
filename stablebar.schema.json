@@ -345,6 +345,7 @@
               "enum": [
                 "background",
                 "underline",
+                "cells",
                 "none"
               ]
             },
@@ -696,6 +697,14 @@
           ],
           "description": "Workspace indicatorStyle only: cell preserves cell-relative drawing; belowBar starts at the visible bar bottom plus offsetY."
         },
+        "show": {
+          "anyOf": [
+            { "enum": ["both", "label", "apps", "none"] },
+            { "$ref": "#/definitions/reference" },
+            { "type": "null" }
+          ],
+          "description": "Workspace cell style only: what the cell shows, its label and app icons (both, the default), one of them, or none."
+        },
         "borderEdges": {
           "anyOf": [
             { "enum": ["bottom", "all"] },
@@ -746,6 +755,14 @@
           ],
           "description": "The SF Symbols variant to draw symbols in, such as fill, slash or circle.fill: slash, then at most one shape, then fill, as SF Symbols names them. A symbol without it keeps its own look; none draws symbols as named."
         },
+        "appIcons": {
+          "anyOf": [
+            { "enum": ["color", "tinted"] },
+            { "$ref": "#/definitions/reference" },
+            { "type": "null" }
+          ],
+          "description": "How app icons are drawn: color, in their own colors, or tinted, in the text color with their own light and dark parts. color by default."
+        },
         "paddingHorizontal": {
           "$ref": "#/definitions/number"
         },
@@ -766,6 +783,22 @@
         },
         "shadowRadius": {
           "$ref": "#/definitions/number"
+        },
+        "shadowOffsetX": {
+          "$ref": "#/definitions/number",
+          "description": "How far the shadow moves right, in points; negative moves it left. 0 by default."
+        },
+        "shadowOffsetY": {
+          "$ref": "#/definitions/number",
+          "description": "How far the shadow drops, in points; negative raises it. 1 by default."
+        },
+        "shadowFrom": {
+          "anyOf": [
+            { "enum": ["content", "shape"] },
+            { "$ref": "#/definitions/reference" },
+            { "type": "null" }
+          ],
+          "description": "What casts a widget's shadow: content, its text, symbols and background together, or shape, its background shape alone, as a group's does. content by default."
         },
         "height": {
           "$ref": "#/definitions/number"
@@ -1390,6 +1423,7 @@
               "enum": [
                 "background",
                 "underline",
+                "cells",
                 "none"
               ]
             },
@@ -2173,9 +2207,10 @@
       "anyOf": [
         { "required": ["type"], "properties": { "type": { "not": { "type": "null" } } } },
         { "required": ["role"], "properties": { "role": { "not": { "type": "null" } } } },
-        { "required": ["id"] }
+        { "required": ["id"] },
+        { "required": ["others"], "properties": { "others": { "anyOf": [{ "const": true }, { "$ref": "#/definitions/reference" }] } } }
       ],
-      "description": "Matches a widget that has every key listed. A selector naming id beats one that doesn't, then the one naming more keys, then the group with the lower ID.",
+      "description": "Matches a widget that has every key listed. A selector naming id beats one that doesn't, then the one naming more keys, then the group with the lower ID. others comes last.",
       "properties": {
         "type": {
           "anyOf": [
@@ -2220,6 +2255,10 @@
         "id": {
           "type": "string",
           "description": "A widget ID, such as one a package fixes."
+        },
+        "others": {
+          "$ref": "#/definitions/boolean",
+          "description": "true takes every widget that no other selector names, such as a Store widget, a script or one of your own, but not spacers, in a pill in each position."
         }
       }
     },
@@ -2383,6 +2422,14 @@
             }
           ]
         },
+        "divider": {
+          "anyOf": [
+            { "$ref": "#/definitions/style" },
+            { "$ref": "#/definitions/reference" },
+            { "type": "null" }
+          ],
+          "description": "A line the bar draws between two widgets or groups side by side. It shows while it has a background, which sets its color; its width is 1 and its height 16 unless set, and cornerRadius and opacity apply too."
+        },
         "appearance": {
           "anyOf": [
             {
@@ -2464,7 +2511,7 @@
         },
         "theme": {
           "$ref": "#/definitions/string",
-          "description": "ID of the theme the bar is drawn with, at any version: built-in for Built-in or a theme turned off."
+          "description": "ID of the theme the bar is drawn with, at any version: built-in for a bar without a theme or with its theme turned off."
         }
       }
     },
@@ -2565,6 +2612,9 @@
             },
             "style": {
               "$ref": "#/definitions/bar/properties/style"
+            },
+            "divider": {
+              "$ref": "#/definitions/bar/properties/divider"
             },
             "glass": {
               "$ref": "#/definitions/bar/properties/glass"

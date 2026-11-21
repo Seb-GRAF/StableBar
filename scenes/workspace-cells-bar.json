@@ -1,0 +1,37 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "workspaceSource": "aerospace",
+    "workspaceDefaults": {
+      "indicator": "cells",
+      "style": {
+        "show": "none", "height": 6, "paddingHorizontal": 3, "cornerRadius": 3, "background": "#8e8e9399",
+        "states": {
+          "focused": { "show": "both", "height": 22, "paddingHorizontal": 9, "cornerRadius": 11, "background": "#0a84ff", "foreground": "#ffffff" },
+          "visible": { "background": "#00000000", "borderColor": "#0a84ff", "borderWidth": 1.5 }
+        }
+      }
+    },
+    "widgets": [
+      { "id": "workspaces", "type": "workspaces", "position": "left" },
+      {
+        "id": "pill", "type": "workspaces", "position": "right",
+        "workspace": { "style": { "states": { "focused": { "show": "none", "height": 6, "paddingHorizontal": 9, "cornerRadius": 3, "background": "#d71921" } } } }
+      }
+    ]
+  },
+  "workspaces": [
+    { "workspace": "1", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 },
+    { "workspace": "2", "workspace-is-focused": true, "workspace-is-visible": true, "monitor-appkit-nsscreen-screens-id": 1 },
+    { "workspace": "3", "workspace-is-focused": false, "workspace-is-visible": true, "monitor-appkit-nsscreen-screens-id": 1 },
+    { "workspace": "4", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 }
+  ],
+  "windows": [
+    { "window-id": 1, "window-title": "Safari", "workspace": "1", "app-name": "Safari", "app-bundle-id": "com.apple.Safari" },
+    { "window-id": 2, "window-title": "Ideas", "workspace": "2", "app-name": "Notes", "app-bundle-id": "com.apple.Notes" },
+    { "window-id": 3, "window-title": "zsh", "workspace": "2", "app-name": "Terminal", "app-bundle-id": "com.apple.Terminal" },
+    { "window-id": 4, "window-title": "Inbox", "workspace": "3", "app-name": "Mail", "app-bundle-id": "com.apple.mail" }
+  ],
+  "draw": "bar",
+  "width": 500
+}

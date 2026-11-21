@@ -1,3 +1,4 @@
+import Compression
 import Foundation
 
 struct ThemeLink: Equatable, Sendable {
@@ -5,10 +6,10 @@ struct ThemeLink: Equatable, Sendable {
     var configuration: Data
 
     static let maximumLength = 65_536
-    static let maximumFileBytes = 32_768
+    static let maximumFileBytes = 131_072
     static let maximumDepth = 32
     static let maximumProfiles = 16
-    static let maximumValues = 372
+    static let maximumValues = 4_096
 
     init(manifest: Data, configuration: Data) {
         self.manifest = manifest
@@ -29,13 +30,24 @@ struct ThemeLink: Equatable, Sendable {
             return value
         }
         let version = try item("v")
-        guard version == "1" else {
-            guard let number = Int(version), number > 1 else { throw .damaged }
+        let link: Self
+        switch version {
+        case "1":
+            guard let manifest = Self.decoded(try item("package")),
+                  let configuration = Self.decoded(try item("config")) else { throw .damaged }
+            link = Self(manifest: manifest, configuration: configuration)
+        case "2":
+            guard let compressed = Self.decoded(try item("d")), !compressed.isEmpty else { throw .damaged }
+            let payload = Self.inflated(compressed, maximumBytes: Self.maximumFileBytes)
+            guard !payload.isEmpty else { throw .damaged }
+            guard payload.count <= Self.maximumFileBytes else { throw .tooLarge }
+            guard let files = try? JSONDecoder().decode([String: String].self, from: payload),
+                  Set(files.keys) == ["package", "config"] else { throw .damaged }
+            link = Self(manifest: Data(files["package"]!.utf8), configuration: Data(files["config"]!.utf8))
+        default:
+            guard let number = Int(version), number > 2 else { throw .damaged }
             throw .unsupportedVersion(version)
         }
-        guard let manifest = Self.decoded(try item("package")),
-              let configuration = Self.decoded(try item("config")) else { throw .damaged }
-        let link = Self(manifest: manifest, configuration: configuration)
         try link.validateFiles()
         self = link
     }
@@ -84,6 +96,17 @@ struct ThemeLink: Equatable, Sendable {
         }) else { return nil }
         let base64 = unpadded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         return Data(base64Encoded: base64 + String(repeating: "=", count: padding))
+    }
+
+    static func inflated(_ data: Data, maximumBytes: Int) -> Data {
+        var output = Data(count: maximumBytes + 1)
+        let count = output.withUnsafeMutableBytes { output in
+            data.withUnsafeBytes { input in
+                compression_decode_buffer(output.bindMemory(to: UInt8.self).baseAddress!, output.count,
+                                          input.bindMemory(to: UInt8.self).baseAddress!, input.count, nil, COMPRESSION_ZLIB)
+            }
+        }
+        return output.prefix(count)
     }
 
     private static func checkJSON(_ data: Data) throws(ThemeLinkError) {
@@ -209,7 +232,7 @@ enum ThemeLinkError: LocalizedError, Equatable {
         case .tooLong: "This theme link is too long. Install the theme's folder instead, with Open a folder… in the Store."
         case .unsupportedVersion: "This theme link needs a newer version of StableBar."
         case .damaged: "This theme link is damaged. Copy it again from the page."
-        case .tooLarge: "This theme is larger than a theme link can carry (32 KB)."
+        case .tooLarge: "This theme is larger than a theme link can carry (128 KB)."
         case .tooDeep: "This theme nests its settings more than 32 levels deep."
         case .tooManyProfiles: "This theme has more than 16 profiles, which a theme link can't carry."
         case .notATheme: "This link doesn't hold a theme."

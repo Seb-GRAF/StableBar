@@ -154,6 +154,7 @@ extension BarStore {
         }
         var layers = [layer("defaults", configuration.defaults)]
         if let role = widget.role { layers.append(layer("roles.\(role.rawValue)", configuration.roleStyle(role))) }
+        if let group = widget.group { layers.append(layer("groups.\(group).style.foreground", configuration.groupStyle(of: widget))) }
         layers.append(layer("widgets.\(widget.id).style", widget.style))
         if let background = widget.background {
             layers.append(layer("widgets.\(widget.id).background", WidgetStyle(background: background)))

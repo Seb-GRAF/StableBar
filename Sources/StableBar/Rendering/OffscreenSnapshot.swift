@@ -55,7 +55,7 @@ enum OffscreenSnapshot {
         let still = if case .still = settle { true } else { false }
         // Views drawn once they hold still are drawn at rest: with their animations off, a change shows in full in the
         // next drawing, rather than over animation frames that a busy process can fall behind on.
-        let view = NSHostingView(rootView: content.transaction { transaction in
+        let view = NSHostingView(rootView: content.environment(\.offscreenSnapshot, true).transaction { transaction in
             guard still else { return }
             transaction.animation = nil
             transaction.disablesAnimations = true

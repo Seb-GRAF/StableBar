@@ -45,6 +45,8 @@ final class WidgetPlacementTests: XCTestCase {
             XCTAssertEqual(edits.count, 1)
             XCTAssertEqual(edits.first?.ids, ["c", "d", "a", "b"])
         }
+        let interleaved = try decode(#"[{"id":"b1","type":"clock","position":"left","group":"b"},{"id":"a1","type":"clock","position":"left","group":"a"},{"id":"b2","type":"clock","position":"left","group":"b"},{"id":"a2","type":"clock","position":"left","group":"a"}]"#)
+        XCTAssertTrue(try WidgetPlacement.move("a1", by: 1, widgets: interleaved).isEmpty)
     }
 
     @MainActor func testSelectedGroupMemberMovesUpAndDownWithOneUndoStepPerAction() throws {

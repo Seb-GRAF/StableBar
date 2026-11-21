@@ -1,0 +1,19 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "defaults": { "background": null, "borderColor": null, "shadowColor": null, "foreground": "#6e6e73" },
+    "groupDefaults": { "background": "#8e8e9333", "cornerRadius": 12, "paddingHorizontal": 2 },
+    "groups": {
+      "tag": { "style": { "background": "#f5e6a8", "foreground": "#5c4a00", "cornerRadius": 3 }, "members": [{ "id": "note" }] },
+      "clock": { "style": { "background": "#0a84ff", "foreground": "#ffffff" }, "members": [{ "type": "clock" }] }
+    },
+    "widgets": [
+      { "id": "plain", "type": "text", "text": "Defaults", "position": "left" },
+      { "id": "note", "type": "text", "text": "Group text", "position": "left" },
+      { "id": "own", "type": "text", "text": "Own color", "position": "right", "group": "clock", "style": { "foreground": "#ffd60a" } },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "right" }
+    ]
+  },
+  "draw": "bar",
+  "width": 500
+}

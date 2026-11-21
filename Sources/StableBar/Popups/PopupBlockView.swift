@@ -524,6 +524,7 @@ struct PopupBlockView: View {
         case .appIcon:
             if let icon = context.appIcon {
                 Image(nsImage: icon).resizable().frame(width: appearance.iconSize, height: appearance.iconSize)
+                    .styledAppIcon(appearance.appIcons, color: appearance.foreground)
             }
         case .appUpdate:
             if let update = context.update, let version = update.version {

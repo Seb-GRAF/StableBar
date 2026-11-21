@@ -43,10 +43,11 @@ struct WidgetSample: View {
     }
 }
 
-/// A widget drawn with sample data, its blocks inheriting `inheritedStyle` as on the bar.
+/// A widget drawn with sample data, its blocks inheriting `inheritedStyle` and styled by `roles` as on the bar.
 struct WidgetSampleContent: View {
     let widget: WidgetConfiguration
     let inheritedStyle: WidgetStyle
+    var roles: [String: WidgetStyle] = [:]
 
     var body: some View {
         Group {
@@ -55,27 +56,31 @@ struct WidgetSampleContent: View {
                 HStack(spacing: 12) { Text("1").foregroundStyle(Color.accentColor); Text("2"); Text("3") }
             case .appleMenu: Image(systemName: "apple.logo")
             case .stableBar: if let image = NSImage(named: "StatusBarIconTemplate") { Image(nsImage: image) }
-            case .appMenu: Text("File   Edit   View")
+            case let .appMenu(expandOnHover, _): Text(expandOnHover ? "Finder" : "File   Edit   View")
             case .spacer: Label("Space", systemImage: "arrow.left.and.right")
             default:
+                let output = sample ?? ScriptOutput(text: "Sample", icon: widget.icon ?? "terminal")
                 let label = widget.label(output: output, activeApp: "Finder", date: Date(timeIntervalSince1970: 1_792_573_260))
-                let layout = widget.defaultLayout(label, output: output, appIcon: false)!
+                // A built-in provider's sample has the fields its widgets' own layouts read.
+                let layout = (sample == nil ? nil : widget.layout) ?? widget.defaultLayout(label, output: output, appIcon: false)!
                 PopupBlockView(block: layout, inheritedStyle: inheritedStyle, fields: label.fields,
                                context: BlockContext(samples: (0..<60).map { [0.2, 0.35, 0.24, 0.5, 0.38, 0.24][$0 % 6] },
-                                                     values: output.values ?? [:], fillsWidth: false, open: { _ in }, runAction: { _, _ in }))
+                                                     values: output.values ?? [:], roles: roles, fillsWidth: false, open: { _ in },
+                                                     runAction: { _, _ in }))
             }
         }
     }
 
-    private var output: ScriptOutput {
+    private var sample: ScriptOutput? {
         switch widget.providerName {
         case "battery": ScriptOutput(text: "82%", icon: "battery.75percent", value: 0.82, fields: ["state": "battery"], values: ["percent": 0.82])
         case "audio": ScriptOutput(text: "45%", icon: "speaker.wave.2", value: 0.45)
         case "inputSource": ScriptOutput(text: "FR", icon: "keyboard")
-        case "system": ScriptOutput(text: "24%", icon: "cpu", value: 0.24)
+        case "system": ScriptOutput(text: "24%", icon: "cpu", value: 0.24, fields: ["memory": "54"], values: ["cpu": 0.24, "memory": 0.54])
         case "network": ScriptOutput(text: "↓ 1.2 MB/s  ↑ 80 KB/s", icon: "network")
-        case "calendar": ScriptOutput(text: "Team meeting", icon: "calendar")
-        default: ScriptOutput(text: "Sample", icon: widget.icon ?? "terminal")
+        case "calendar": ScriptOutput(text: "Team meeting", icon: "calendar", fields: ["title": "Team meeting", "phase": "soon", "minutes": "9",
+                                                                                                 "joinCommand": "open 'https://meet.google.com'"])
+        default: nil
         }
     }
 }

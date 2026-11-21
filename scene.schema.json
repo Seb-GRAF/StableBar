@@ -157,21 +157,13 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "workspaceCheck": {
-          "description": "A canned result for Finishing touches when the configuration has yabai or OmniWM Workspaces. Never contacts a window manager; defaults to signalsMissing for yabai and ipcOff for OmniWM.",
-          "enum": ["connected", "signalsMissing", "reloadYabai", "ipcOff", "couldntCheck"]
-        },
         "step": {
-          "description": "The step of the tour: where the bar goes, its look, the finishing touches, the permissions, or Try your bar. placement by default.",
-          "enum": ["placement", "look", "touches", "permissions", "tryIt"]
-        },
-        "placement": {
-          "description": "The first step's choice, made before drawing: Replace the menu bar (top), Keep the menu bar (belowMenuBar) or Put it at the bottom (bottom). Without it, none is picked.",
-          "enum": ["top", "belowMenuBar", "bottom"]
+          "description": "The step of the tour: the intro once it has settled, Make it yours, Allow what your bar needs, or You're all set. From allow on, Automation's Allow has made the bar the menu bar, or put it below the menu bar when automation is false, unless automationAsked is false. intro by default.",
+          "enum": ["intro", "choose", "allow", "done"]
         },
         "preset": {
-          "description": "The preset picked on the second step.",
-          "enum": ["minimal", "developer", "workday", "notch", "everything"]
+          "description": "The preset picked on Make it yours.",
+          "enum": ["everyday", "minimal", "developer", "workday", "dashboard"]
         },
         "menuBarHides": {
           "description": "Whether macOS hides its menu bar automatically. false by default.",
@@ -185,6 +177,10 @@
           "description": "Whether macOS lets StableBar control System Events, which hiding or showing the menu bar needs. true by default.",
           "type": "boolean"
         },
+        "automationAsked": {
+          "description": "Whether Automation's Allow has been clicked on Allow what your bar needs. With false and a menu bar that shows, the bar waits on the stage above the card. true by default.",
+          "type": "boolean"
+        },
         "calendars": {
           "description": "Whether macOS allows StableBar full Calendar access. true by default.",
           "type": "boolean"
@@ -193,16 +189,29 @@
           "description": "Whether the Mac has an internal battery, which presets add Battery for. true by default.",
           "type": "boolean"
         },
-        "notch": {
-          "description": "Whether any connected display has a notch, which the Notch preset needs. true by default.",
-          "type": "boolean"
-        },
         "inApplications": {
           "description": "Whether StableBar runs from an Applications folder, which Open at login needs. true by default.",
           "type": "boolean"
         },
         "suggested": {
-          "description": "Store index entries the look step shows under Found on your Mac, as if the Mac had their tools. None by default; the Store's index is never downloaded.",
+          "description": "Store index entries Make it yours shows under Found on your Mac, as if the Mac had their tools. None by default; the Store's index is never downloaded.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "version", "archive", "sha256"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "version": { "type": "string" },
+              "description": { "type": "string" },
+              "symbol": { "type": "string" },
+              "archive": { "type": "string" },
+              "sha256": { "type": "string" }
+            }
+          }
+        },
+        "storeWidgets": {
+          "description": "Store index entries for the widgets presets can add, as if the Store listed them for this Mac; presets draw them with their symbol. Without it, the Store can't be reached and presets leave out their Store widgets. The Store's index is never downloaded.",
           "type": "array",
           "items": {
             "type": "object",
@@ -225,7 +234,7 @@
       "enum": ["ready", "replace", "useExisting", "failed", "moving", "setupOpen"]
     },
     "windowsUnderBar": {
-      "description": "Draw setup's last step or Settings General as if this window manager ran and left a window under the bar, with the warning and the gap it needs for the scene's bar. Drawing never reads this Mac's windows.",
+      "description": "Draw Settings General as if this window manager ran and left a window under the bar, with the warning and the gap it needs for the scene's bar. Drawing never reads this Mac's windows.",
       "enum": ["aerospace", "yabai", "omniwm"]
     },
     "shareScreen": {
@@ -254,6 +263,7 @@
       "items": { "enum": ["increaseContrast", "reduceTransparency"] },
       "uniqueItems": true
     },
+    "wallpaper": { "description": "For `bar` and `popup`: an image relative to this file, drawn behind the bar or popup in place of the setup tour's wallpaper, scaled to fill and aligned to the top. For `settings` and `setup`: the Mac's wallpaper, which the previews of the bar show in place of the drawn backdrop.", "type": "string" },
     "width": { "description": "The image's width in points.", "type": "number", "minimum": 100, "maximum": 4000 },
     "height": { "description": "The image's height in points.", "type": "number", "minimum": 20, "maximum": 4000 }
   }

@@ -115,7 +115,7 @@ private func scene(_ json: String) throws -> SceneFile {
         { "workspace": "1", "workspace-is-focused": true, "workspace-is-visible": true, "monitor-appkit-nsscreen-screens-id": 1 },
         { "workspace": "2", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 }
       ],
-      "desktopShortcuts": [1], "draw": "setup", "setup": { "step": "permissions" }
+      "desktopShortcuts": [1], "draw": "setup", "setup": { "step": "allow" }
     }
     """#, in: directory)
     defer { store.stop() }
@@ -250,9 +250,9 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
     image.bitmapData.map { Data(bytes: $0, count: image.bytesPerRow * image.pixelsHigh) }
 }
 
-/// A setup scene draws the step it names once nothing moves, so two drawings of it match. The
-/// first step loads nothing as it opens, unlike the theme cards of the second, and fits without scrolling, and the bar
-/// shows no clock, whose time zone other tests change, so only motion could tell the drawings apart.
+/// A setup scene draws the step it names once nothing moves, so two drawings of it match: the intro drawn finished.
+/// The first step shows no theme cards, which load as it opens, and the bar shows no clock, whose time zone other tests
+/// change, so only motion could tell the drawings apart.
 /// Like every scene it runs nothing: setup's choices show in the tour, not on the bar, where the widgets a preset adds
 /// would start their commands.
 @Test @MainActor func setupSceneDrawsTheSameStepEachTime() async throws {
@@ -260,7 +260,7 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
     defer { try? FileManager.default.removeItem(at: directory) }
     let json = #"""
     {"configuration": "config.json", "draw": "setup",
-     "setup": {"step": "placement", "placement": "top", "preset": "developer"}, "width": 1200, "height": 1000}
+     "setup": {"step": "intro", "preset": "developer"}, "width": 1200, "height": 1000}
     """#
     var images: [NSBitmapImageRep] = []
     for name in ["first", "second"] {
@@ -287,9 +287,9 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
     #expect(pixels(images[0]) == pixels(images[1]))
 }
 
-/// A configured manager needs no connection result while its check is off screen. Every setup step must still draw.
-@Test(arguments: ["placement", "look", "permissions", "tryIt"]) @MainActor
-func setupScenesOutsideFinishingTouchesDoNotWaitForAWorkspaceCheck(step: String) async throws {
+/// Every setup step draws without contacting the window manager the configuration names.
+@Test(arguments: SetupSession.Step.allCases.map { "\($0)" }) @MainActor
+func everySetupStepDrawsWithoutRunningAnything(step: String) async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
     let (_, store) = try await drawn(#"""

@@ -1,0 +1,46 @@
+{
+  "tokens": {
+    "surface": { "light": "#000000", "dark": "#000000" },
+    "surfaceRaised": { "light": "#1c1c1e", "dark": "#1c1c1e" },
+    "text": { "light": "#f5f5f7", "dark": "#f5f5f7" },
+    "textMuted": { "light": "#8e8e93", "dark": "#8e8e93" },
+    "accent": { "light": "#64d2ff", "dark": "#64d2ff" },
+    "track": { "light": "#ffffff26", "dark": "#ffffff26" },
+    "hairline": { "light": "#ffffff1a", "dark": "#ffffff1a" },
+    "warning": { "light": "#ffd60a", "dark": "#ffd60a" },
+    "critical": { "light": "#ff453a", "dark": "#ff453a" }
+  },
+  "bar": {
+    "style": {
+      "background": "@token.surface"
+    }
+  },
+  "defaults": {
+    "foreground": "@token.text",
+    "background": null,
+    "hoverBackground": "@token.surfaceRaised",
+    "borderColor": null,
+    "accent": "@token.accent",
+    "shadowColor": null,
+    "accentText": { "light": "#000000", "dark": "#000000" },
+    "cornerRadius": 6,
+    "fontSize": 13,
+    "fontWeight": "medium"
+  },
+  "popupDefaults": {
+    "background": "@token.surface",
+    "borderColor": "@token.hairline",
+    "shadowColor": { "light": "#0000001a", "dark": "#00000059" }
+  },
+  "workspaceDefaults": {
+    "indicator": "none",
+    "style": {
+      "foreground": "@token.textMuted",
+      "states": {
+        "focused": {
+          "foreground": "@token.text"
+        }
+      }
+    }
+  }
+}

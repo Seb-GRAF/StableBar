@@ -1,0 +1,25 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "bar": { "height": 44 },
+    "defaults": { "background": null, "borderColor": null, "shadowColor": null },
+    "groupDefaults": { "background": { "light": "#ffffff", "dark": "#3a3a3c" }, "cornerRadius": 10, "paddingHorizontal": 4 },
+    "groups": {
+      "island": { "style": { "shadowColor": "#00000040", "shadowRadius": 6, "shadowOffsetY": 3 } },
+      "sticker": { "style": { "borderColor": "#000000", "borderWidth": 1.5, "cornerRadius": 6,
+                              "shadowColor": "#000000", "shadowRadius": 0, "shadowOffsetX": 3, "shadowOffsetY": 3 } }
+    },
+    "widgets": [
+      { "id": "wifi", "type": "text", "text": "", "icon": "wifi", "position": "left", "group": "island" },
+      { "id": "focus", "type": "text", "text": "Focus", "icon": "moon.fill", "position": "left", "group": "island" },
+      { "id": "glow", "type": "text", "text": "Lifted", "position": "center",
+        "style": { "shadowColor": "#0a84ff99", "shadowRadius": 3, "shadowOffsetX": 2, "shadowOffsetY": 2 } },
+      { "id": "shape", "type": "text", "text": "Shape", "position": "center",
+        "style": { "background": { "light": "#ffffff", "dark": "#3a3a3c" }, "cornerRadius": 6, "shadowColor": "#000000",
+                   "shadowRadius": 0, "shadowOffsetX": 2, "shadowOffsetY": 2, "shadowFrom": "shape" } },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "right", "group": "sticker" }
+    ]
+  },
+  "draw": "bar",
+  "width": 500
+}

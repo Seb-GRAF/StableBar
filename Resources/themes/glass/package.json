@@ -1,0 +1,9 @@
+{
+  "id": "glass",
+  "name": "Glass",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "One continuous sheet of lightly tinted Liquid Glass, with frosted wells inside it and a solid blue pill for the focused workspace.",
+  "author": "StableBar"
+}

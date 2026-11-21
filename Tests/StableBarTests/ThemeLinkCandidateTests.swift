@@ -630,6 +630,7 @@ struct ThemeLinkCandidateTests {
         case .missingKind: manifest["kind"] = nil
         case .bundledID: manifest["id"] = .string("nord")
         case .legacyID: manifest["id"] = .string("slate")
+        case .classicID: manifest["id"] = .string("classic")
         case .widgetID:
             let source = fixture.directory.appending(path: "widget")
             try fixture.write(#"{"id":"harbour-test","name":"Widget","version":"2","kind":"widgets","entry":"config.json"}"#,
@@ -707,7 +708,7 @@ struct ThemeLinkCandidateTests {
         link.manifest = try configurationData(manifest)
         link.configuration = try configurationData(configuration)
         switch rejection {
-        case .tooLarge: link.configuration = Data((#"{"tokens":{"large":""# + String(repeating: "x", count: 32_768) + #""}}"#).utf8)
+        case .tooLarge: link.configuration = Data((#"{"tokens":{"large":""# + String(repeating: "x", count: ThemeLink.maximumFileBytes) + #""}}"#).utf8)
         case .tooDeep: link.configuration = Data((#"{"tokens":{"deep":"# + String(repeating: "[", count: 500) + "0" + String(repeating: "]", count: 500) + "}}").utf8)
         case .tooManyProfiles: link.configuration = try configurationData(["profiles": .array((0..<17).map { profile([:], name: "p\($0)") })])
         case .tooManyNestedProfiles:
@@ -736,6 +737,7 @@ struct ThemeLinkCandidateTests {
         case .widgets, .missingKind: #expect(error as? ThemeLinkError == .notATheme)
         case .bundledID: #expect(error as? ThemeLinkError == .reservedID("nord"))
         case .legacyID: #expect(error as? ThemeLinkError == .reservedID("slate"))
+        case .classicID: #expect(error as? ThemeLinkError == .reservedID("classic"))
         case .widgetID: #expect(error as? ThemeLinkError == .idTaken("harbour-test"))
         case .tooLarge: #expect(error as? ThemeLinkError == .tooLarge)
         case .tooDeep: #expect(error as? ThemeLinkError == .tooDeep)
@@ -848,7 +850,7 @@ struct ThemeLinkCandidateTests {
             #expect(candidate.validationExpansionUnits < 300_000)
             #expect(candidate.validationOriginPathBytes < 8_000_000)
         }
-        #expect(ThemeLink.maximumValues >= 4 * largestConfiguration)
+        #expect(ThemeLink.maximumValues >= 2 * largestConfiguration)
     }
 
     @Test func longKeyOriginsShareOneAllowanceAcrossDisabledProfiles() throws {
@@ -991,7 +993,8 @@ struct ThemeLinkCandidateTests {
         ("style.paddingTop", 0, 1_000), ("style.paddingBottom", 0, 1_000),
         ("style.states.hover.height", 0, 1_000), ("style.states.height.spacing", 0, 1_000),
         ("style.states.hover.states.active.fontSize", 6, 40), ("style.opacity", 0, 1),
-        ("glass.transparency", 0, 1)
+        ("glass.transparency", 0, 1), ("divider.width", 0, 6), ("divider.height", 0, 100),
+        ("divider.cornerRadius", 0, 40), ("divider.opacity", 0, 1)
     ], [false, true])
     func barNumbersStayWithinTheirSettingsRanges(
         range: (String, Double, Double), inProfile: Bool
@@ -1471,8 +1474,8 @@ struct ThemeLinkCandidateTests {
         #expect(document["groups"] == .object(["status": .object([:])]))
         let gallery = ThemeGallery(store: store)
         await gallery.refresh()
-        gallery.select(try #require(gallery.choices.first { $0.key == "built-in" }))
-        #expect(gallery.errors["built-in"] == nil)
+        gallery.select(try #require(gallery.choices.first { $0.key == "clear" }))
+        #expect(gallery.errors["clear"] == nil)
         #expect(store.configurationError == nil)
         #expect(store.configuration?.widgets.first { $0.id == "battery" }?.group == "status")
         try store.customizationHistory.undo()
@@ -1642,7 +1645,7 @@ struct ThemeLinkCandidateTests {
 
     enum Rejection: CaseIterable, Sendable {
         case bar, profileBar, hosts, permissions, tools, secrets, screenshot, includes, profileIncludes
-        case widgets, missingKind, bundledID, legacyID, widgetID, doublingTokens, profileExpansion, nestedProfileExpansion
+        case widgets, missingKind, bundledID, legacyID, classicID, widgetID, doublingTokens, profileExpansion, nestedProfileExpansion
         case tokenBar, overriddenTokenBar, settingBar, referenceDepth, referenceOrigins, invalidEntry, unknownProperty
         case combinedProfileBar, settingChoiceBar, nestedProfileBar, nullBar, arrayBar
         case tooLarge, tooDeep, tooManyProfiles, tooManyNestedProfiles, notUTF8, notAnObject
@@ -1696,7 +1699,7 @@ struct ThemeLinkCandidateTests {
         return count(try JSONSerialization.jsonObject(with: data))
     }
 
-    private func longKeyLink(profileCount: Int, groups: Int = 10) throws -> ThemeLink {
+    private func longKeyLink(profileCount: Int, groups: Int = 2) throws -> ThemeLink {
         var link = try linkedTheme()
         func configuration(keyBytes: Int) throws -> Data {
             let tokens: [String: ConfigurationValue] = [

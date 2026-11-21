@@ -7,7 +7,7 @@ final class ThemeTrialTests: XCTestCase {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let installed = try fixture.theme(#"{"defaults":{"fontSize":19}}"#)
-        for selection in [#"{"id":"catppuccin"}"#, #"{"id":"test-theme","version":"1"}"#, #"{"id":"catppuccin","enabled":false}"#, ""] {
+        for selection in [#"{"id":"glass"}"#, #"{"id":"test-theme","version":"1"}"#, #"{"id":"glass","enabled":false}"#, ""] {
             let configuration = selection.isEmpty ? #"{"widgets":[]}"# : #"{"theme":\#(selection),"widgets":[]}"#
             try fixture.write(configuration, to: fixture.url)
             let store = try loadedStore(fixture)
@@ -16,7 +16,7 @@ final class ThemeTrialTests: XCTestCase {
             let gallery = ThemeGallery(store: store)
             await gallery.refresh()
             XCTAssertEqual(trial.choices.map(\.key), gallery.choices.map(\.key))
-            XCTAssertTrue(trial.choices.first?.isBuiltIn == true)
+            XCTAssertEqual(trial.choices.first?.key, "clear")
             XCTAssertEqual(trial.choices.last?.key, installed.key)
             XCTAssertEqual(trial.choice?.key, gallery.selectedKey)
             XCTAssertEqual(trial.position, "\(trial.selectedIndex + 1) of \(trial.choices.count)")
@@ -24,7 +24,7 @@ final class ThemeTrialTests: XCTestCase {
     }
 
     @MainActor func testPreviousAndNextWrapAndPreviewWithoutWritingOrAddingHistory() throws {
-        let fixture = try ThemeGalleryFixture()
+        let fixture = try ThemeGalleryFixture(#"{"theme":{"id":"clear"},"widgets":[]}"#)
         defer { fixture.close() }
         let store = try loadedStore(fixture)
         defer { store.stop() }
@@ -32,7 +32,7 @@ final class ThemeTrialTests: XCTestCase {
         let trial = ThemeTrial(store: store)
         trial.previous()
         XCTAssertEqual(trial.selectedIndex, trial.choices.count - 1)
-        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 0)
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 6)
         trial.next()
         XCTAssertEqual(trial.selectedIndex, 0)
         for index in 1...trial.choices.count {
@@ -49,12 +49,12 @@ final class ThemeTrialTests: XCTestCase {
     @MainActor func testGalleryAndTrialSaveIdenticalThemeEditsIncludingMainFileSettingsAndInheritedThemes() async throws {
         let cases: [(main: String, included: String, key: String, properties: [String: ConfigurationValue]?)] = [
             (#"{"widgets":[]}"#, "{}", "built-in", nil),
-            (#"{"theme":{"id":"catppuccin"},"widgets":[]}"#, "{}", "built-in", nil),
-            (#"{"widgets":[]}"#, "{}", "catppuccin", ["id": .string("catppuccin")]),
+            (#"{"theme":{"id":"catppuccin"},"widgets":[]}"#, "{}", "glass", ["id": .string("glass")]),
+            (#"{"widgets":[]}"#, "{}", "glass", ["id": .string("glass")]),
             (#"{"theme":{"id":"test-theme","version":"1","settings":{"size":48}},"widgets":[]}"#,
              "{}", "test-theme/1", ["id": .string("test-theme"), "version": .string("1"), "settings": .object(["size": .number(48)])]),
             (#"{"includes":["included.json"],"widgets":[]}"#, #"{"theme":{"id":"catppuccin"}}"#,
-             "built-in", ["id": .string("built-in")]),
+             "glass", ["id": .string("glass")]),
             (#"{"includes":["included.json"],"widgets":[]}"#,
              #"{"theme":{"id":"test-theme","version":"1","settings":{"size":48}}}"#,
              "test-theme/1", ["id": .string("test-theme"), "version": .string("1"), "settings": .null])
@@ -113,7 +113,7 @@ final class ThemeTrialTests: XCTestCase {
         defer { store.stop() }
         let gallery = ThemeGallery(store: store)
         await gallery.refresh()
-        for key in ["built-in", "catppuccin", other.key] {
+        for key in ["clear", "glass", other.key] {
             let choice = try XCTUnwrap(gallery.choices.first { $0.key == key })
             for trialSelection in [false, true] {
                 if trialSelection {
@@ -267,11 +267,11 @@ final class ThemeTrialTests: XCTestCase {
         trial.cancel()
         XCTAssertNil(trial.error)
         XCTAssertFalse(trial.isActive)
-        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("phosphor")]))
+        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("sticker")]))
         XCTAssertNil(try fixture.document()["bar"])
         XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Temporary"))
         XCTAssertEqual(store.configuration?.bar.margin, 9)
-        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 0)
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 6)
         XCTAssertEqual(try encodedEdits(store), edits)
         XCTAssertFalse(store.customizationHistory.hasPendingChanges)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
@@ -280,11 +280,11 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Temporary"))
         XCTAssertEqual(try encodedEdits(store), edits)
         try store.customizationHistory.redo()
-        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 0)
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 6)
         XCTAssertEqual(try encodedEdits(store), edits)
     }
 
-    @MainActor func testKeepBuiltInOverridesAnIncludedThemeAndUndoRestoresIt() throws {
+    @MainActor func testKeepOverridesAnIncludedThemeAndUndoRestoresIt() throws {
         let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"widgets":[]}"#)
         defer { fixture.close() }
         let includedURL = fixture.directory.appending(path: "included.json")
@@ -295,11 +295,11 @@ final class ThemeTrialTests: XCTestCase {
         let trial = ThemeTrial(store: store)
         XCTAssertEqual(trial.choice?.key, "phosphor")
         trial.next()
-        XCTAssertTrue(trial.choice?.isBuiltIn == true)
+        XCTAssertEqual(trial.choice?.key, "clear")
         XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 0)
         trial.keep()
         XCTAssertNil(trial.error)
-        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("built-in")]))
+        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("clear")]))
         XCTAssertEqual(try Data(contentsOf: includedURL), included)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         try store.customizationHistory.undo()
@@ -326,7 +326,7 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertEqual(trial.choice?.key, "test-theme/1")
         XCTAssertEqual(store.configuration?.bar.height, 48)
         trial.next()
-        XCTAssertTrue(trial.choice?.isBuiltIn == true)
+        XCTAssertEqual(trial.choice?.key, "clear")
         trial.previous()
         XCTAssertEqual(store.configuration?.bar.height, 48)
         XCTAssertTrue(store.configuration?.widgets.contains { $0.content == .text("Package") } == true)
@@ -361,7 +361,7 @@ final class ThemeTrialTests: XCTestCase {
             heights.append(displays.map { configuration.barGeometry(for: $0).layoutHeight })
         }
         let trial = ThemeTrial(store: store)
-        trial.previous()
+        trial.next()
         XCTAssertNil(trial.error)
         XCTAssertEqual(heights.last, [64, 80])
         XCTAssertEqual(store.activeProfiles, ["two screens"])
@@ -369,7 +369,7 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertEqual(heights.last, [40, 50])
         XCTAssertTrue(store.activeProfiles.isEmpty)
         let kept = ThemeTrial(store: store)
-        kept.previous()
+        kept.next()
         kept.keep()
         XCTAssertNil(kept.error)
         XCTAssertEqual(heights.last, [64, 80])
@@ -433,7 +433,7 @@ final class ThemeTrialTests: XCTestCase {
             XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Temporary"))
             XCTAssertEqual(try encodedEdits(store), edits)
             XCTAssertNil(try fixture.document()["bar"])
-            XCTAssertNil(try fixture.document()["theme"])
+            XCTAssertEqual(try fixture.document()["theme"], keep ? .object(["id": .string("clear")]) : nil)
         }
     }
 
@@ -446,7 +446,7 @@ final class ThemeTrialTests: XCTestCase {
         let cancelled = ThemeTrial(store: store)
         XCTAssertFalse(cancelled.handleKey(48)) // Tab remains available to focus controls.
         XCTAssertTrue(cancelled.handleKey(123))
-        XCTAssertEqual(cancelled.choice?.key, "phosphor")
+        XCTAssertEqual(cancelled.choice?.key, "sticker")
         XCTAssertTrue(cancelled.handleKey(124))
         XCTAssertTrue(cancelled.choice?.isBuiltIn == true)
         XCTAssertTrue(cancelled.handleKey(123))
@@ -493,39 +493,39 @@ final class ThemeTrialTests: XCTestCase {
         let original = try Data(contentsOf: fixture.url)
         let baseline = store.effectiveDocument
         let trial = ThemeTrial(store: store)
-        trial.previous()
-        XCTAssertEqual(trial.choice?.key, broken[1].key)
-        XCTAssertEqual(trial.choice?.title, broken[1].title)
+        trial.next()
+        XCTAssertEqual(trial.choice?.key, broken[0].key)
+        XCTAssertEqual(trial.choice?.title, broken[0].title)
         XCTAssertFalse(trial.canKeep)
         XCTAssertNotNil(trial.error)
         XCTAssertEqual(store.effectiveDocument, baseline)
-        trial.previous()
-        XCTAssertEqual(trial.choice?.key, broken[0].key)
-        XCTAssertEqual(trial.position, "8 of 9")
+        trial.next()
+        XCTAssertEqual(trial.choice?.key, broken[1].key)
+        XCTAssertEqual(trial.position, "10 of 10")
         XCTAssertFalse(trial.canKeep)
         XCTAssertNotNil(trial.error)
         XCTAssertTrue(trial.handleKey(36))
         XCTAssertTrue(trial.isActive)
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
-        trial.previous()
-        XCTAssertEqual(trial.choice?.key, "phosphor")
+        trial.next()
+        XCTAssertEqual(trial.choice?.key, "clear")
         XCTAssertTrue(trial.canKeep)
         XCTAssertNil(trial.error)
-        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 0)
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
         let lastGood = store.effectiveDocument
-        for choice in broken {
-            trial.next()
+        for choice in broken.reversed() {
+            trial.previous()
             XCTAssertEqual(trial.choice?.key, choice.key)
             XCTAssertFalse(trial.canKeep)
             XCTAssertNotNil(trial.error)
             XCTAssertEqual(store.effectiveDocument, lastGood)
         }
-        trial.next()
+        trial.previous()
         XCTAssertTrue(trial.choice?.isBuiltIn == true)
         XCTAssertTrue(trial.canKeep)
         XCTAssertNil(trial.error)
-        XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 0)
+        XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 13)
         try FileManager.default.removeItem(at: fixture.url)
         trial.keep()
         XCTAssertNotNil(trial.error)

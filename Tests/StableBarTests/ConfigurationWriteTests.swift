@@ -65,7 +65,7 @@ final class ConfigurationWriteTests: XCTestCase {
             try store.customizationHistory.change(.init(action: .bar, properties: ["height": .number(48)]))
             try store.customizationHistory.flush()
         case "persist": try store.configurationStore.applyEdits([.init(action: .bar, properties: ["height": .number(48)])], persist: true)
-        default: try SetupPreferences(appearance: .light).save(to: store.configurationStore.configurationURL, context: store.configurationStore.context)
+        default: try SetupPreferences(keepWindowsClear: true).save(to: store.configurationStore.configurationURL, context: store.configurationStore.context)
         }
     }
 }

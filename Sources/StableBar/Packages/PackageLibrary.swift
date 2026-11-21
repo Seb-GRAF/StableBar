@@ -695,7 +695,8 @@ final class PackageLibrary {
     func deactivate(_ draft: PackageDraft) {
         guard let store else { return }
         do {
-            try store.customizationHistory.change(edit(draft, enabled: false))
+            try store.customizationHistory.change(draft.inspection.manifest.kind == .theme
+                ? store.configurationStore.firstIncludedThemeEdit() : edit(draft, enabled: false))
             draft.error = nil
             configurationChanged()
         } catch {
@@ -832,5 +833,11 @@ extension PackageCatalog {
             suggestion.tools.contains { tool in path.contains { FileManager.default.isExecutableFile(atPath: "\($0)/\(tool)") } }
                 || suggestion.apps.contains { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
         }.flatMap(\.packages))
+    }
+
+    /// The Store's widgets this Mac can use: one the Store suggests for some tools or apps needs `suggested` to name it.
+    func storeWidgets(suggested: Set<String>) -> [PackageIndex.Entry] {
+        let needsTools = Set(suggestions.flatMap(\.packages))
+        return widgets.filter { $0.sourceID == PackageSource.storeID && (!needsTools.contains($0.id) || suggested.contains($0.id)) }
     }
 }

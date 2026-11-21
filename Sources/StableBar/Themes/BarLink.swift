@@ -1,4 +1,3 @@
-import Compression
 import CryptoKit
 import Foundation
 
@@ -67,7 +66,10 @@ struct BarLink: Equatable, Sendable {
             throw .unsupportedVersion
         }
         guard let compressed = ThemeLink.decoded(try item("d")), !compressed.isEmpty else { throw .damaged }
-        try self.init(payload: Self.inflated(compressed))
+        let payload = ThemeLink.inflated(compressed, maximumBytes: Self.maximumBytes)
+        guard !payload.isEmpty else { throw .damaged }
+        guard payload.count <= Self.maximumBytes else { throw .tooLarge }
+        try self.init(payload: payload)
     }
 
     /// Reads the link's JSON payload, keeping only what a bar link carries.
@@ -166,19 +168,6 @@ struct BarLink: Equatable, Sendable {
     /// Whether a link carries a package setting: a secret stays in the Keychain, and free text can name a person or place.
     static func carries(_ setting: WidgetPackageSetting) -> Bool {
         setting.type == "number" || setting.type == "bool" || setting.choices != nil
-    }
-
-    private static func inflated(_ data: Data) throws(BarLinkError) -> Data {
-        var output = Data(count: maximumBytes + 1)
-        let count = output.withUnsafeMutableBytes { output in
-            data.withUnsafeBytes { input in
-                compression_decode_buffer(output.bindMemory(to: UInt8.self).baseAddress!, output.count,
-                                          input.bindMemory(to: UInt8.self).baseAddress!, input.count, nil, COMPRESSION_ZLIB)
-            }
-        }
-        guard count > 0 else { throw .damaged }
-        guard count <= maximumBytes else { throw .tooLarge }
-        return output.prefix(count)
     }
 
     private static func checkSize(_ value: Any, depth: Int, values: inout Int) throws(BarLinkError) {

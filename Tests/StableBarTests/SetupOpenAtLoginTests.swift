@@ -24,6 +24,7 @@ import Testing
     system.hasBattery = { true }
     system.defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
     system.workspaceSource = { $0 ?? .spaces }
+    system.windowManagerRuns = { false }
     system.isInApplications = { inApplications }
     system.loginStatus = status
     system.setOpenAtLogin = { logins.append($0) }
@@ -37,21 +38,16 @@ func changingOrDeselectingASetupPresetKeepsLaterChoices(preset: SetupPreferences
     defer { store.stop(); fixture.close() }
     await session.place(.top)
     session.toggle(preset == .workday ? .minimal : .workday)
-    session.preferences.clock = .twelveHour
-    session.preferences.keepWindowsClear = true
-    session.preferences.keepNotificationsClear = true
     session.preferences.deferMeetings = true
-    session.preferences.appearance = .light
     session.preferences.theme = .package(id: "slate", version: nil)
     session.openAtLogin = opensAtLogin
     let choices = session.preferences
-    session.step = SetupSession.Step.look.rawValue
+    session.step = .choose
 
     session.toggle(preset)
     let presetChoices = preset.preferences(workspaces: session.workspaceSource, placement: .top, hasBattery: true)
     var expected = choices
-    expected.appearance = presetChoices.appearance
-    expected.theme = presetChoices.theme
+    // Until the Store answers, a preset keeps its Store widgets, which wait for their review.
     expected.widgetSets = presetChoices.widgetSets
     #expect(session.preset == preset)
     #expect(session.preferences == expected)
@@ -59,15 +55,12 @@ func changingOrDeselectingASetupPresetKeepsLaterChoices(preset: SetupPreferences
     #expect(session.openAtLogin == opensAtLogin)
     #expect(session.opensAtLogin == opensAtLogin)
     #expect(session.placementChoice == .top)
-    #expect(session.placementTookEffect)
+    #expect(session.readyToLand)
     #expect(session.menuBarHides)
-    #expect(session.automationAccess == .allowed)
-    #expect(session.step == SetupSession.Step.look.rawValue)
+    #expect(session.step == .choose)
     #expect(logins().isEmpty)
 
     session.toggle(preset)
-    expected.appearance = .current
-    expected.theme = .current
     expected.widgetSets = []
     #expect(session.preset == nil)
     #expect(session.preferences == expected)
@@ -75,22 +68,19 @@ func changingOrDeselectingASetupPresetKeepsLaterChoices(preset: SetupPreferences
     #expect(session.openAtLogin == opensAtLogin)
     #expect(session.opensAtLogin == opensAtLogin)
     #expect(session.placementChoice == .top)
-    #expect(session.placementTookEffect)
+    #expect(session.readyToLand)
     #expect(session.menuBarHides)
-    #expect(session.automationAccess == .allowed)
-    #expect(session.step == SetupSession.Step.look.rawValue)
+    #expect(session.step == .choose)
 
     session.finish()
     #expect(session.finished)
     let saved = try JSONDecoder().decode(Configuration.self, from: Data(contentsOf: fixture.url))
-    #expect(saved.widgets[0].content == .clock(format: SetupPreferences.clockFormat(hours: .twelveHour)))
     #expect(saved.bar.keepWindowsClear)
-    #expect(saved.bar.keepNotificationsClear)
     #expect(logins() == (opensAtLogin ? [true] : []))
 }
 
-/// Retained choices can stop applying and apply again: a bar without a clock ignores its format, and a preset
-/// without Meetings needs no Calendars access. Choosing Meetings again keeps it deferred and lets setup finish.
+/// Retained choices can stop applying and apply again: a preset without Meetings needs no Calendars access. Choosing
+/// Meetings again keeps it deferred and lets setup finish.
 @Test(arguments: [SetupPreferences.Preset?.none, .minimal, .workday]) @MainActor
 func setupFinishesWithKeptChoicesForMissingWidgets(preset: SetupPreferences.Preset?) async throws {
     let (session, fixture, store, logins) = try loginSession(
@@ -98,7 +88,6 @@ func setupFinishesWithKeptChoicesForMissingWidgets(preset: SetupPreferences.Pres
     defer { store.stop(); fixture.close() }
     await session.place(.belowMenuBar)
     session.toggle(.workday)
-    session.preferences.clock = .twelveHour
     session.preferences.deferMeetings = true
     session.toggle(.minimal)
     if let preset {
@@ -107,7 +96,6 @@ func setupFinishesWithKeptChoicesForMissingWidgets(preset: SetupPreferences.Pres
         session.toggle(.minimal)
     }
     #expect(session.preset == preset)
-    #expect(session.preferences.clock == .twelveHour)
     #expect(session.preferences.deferMeetings)
     #expect(session.needsCalendarSetup == (preset == .workday))
     #expect(!session.needsCalendarAccess)
@@ -115,26 +103,25 @@ func setupFinishesWithKeptChoicesForMissingWidgets(preset: SetupPreferences.Pres
     session.finish()
     #expect(session.finished)
     #expect(session.error == nil)
-    let saved = try JSONDecoder().decode(Configuration.self, from: Data(contentsOf: fixture.url))
-    #expect(!saved.widgets.contains { if case .clock = $0.content { true } else { false } })
+    // Workday's meeting names the theme's tokens, which only the loader resolves.
+    let saved = try #require(fixture.document()["widgets"]).decoded([[String: ConfigurationValue]].self)
+    #expect(!saved.contains { $0["type"] == .string("clock") })
     if preset == .workday {
-        #expect(saved.widgets.first { $0.id == "meeting" }?.enabled == false)
+        #expect(saved.first { $0["id"] == .string("meeting") }?["enabled"] == .bool(false))
     } else {
-        #expect(!saved.widgets.contains { $0.id == "meeting" })
-        #expect(!saved.providers.values.contains { $0.type == "calendar" })
+        #expect(!saved.contains { $0["type"] == .string("calendar") })
     }
     #expect(try fixture.document()["widgetOverrides"] == nil)
-    #expect(logins().isEmpty)
+    #expect(logins() == [true])
 }
 
-/// Replacing the menu bar keeps it hidden even while StableBar isn't running, so setup turns on Open at login for an
-/// app in Applications, unless the person turns it off.
-@Test @MainActor func replacingTheMenuBarTurnsOnOpenAtLogin() async throws {
+/// In the menu bar's place, the bar keeps the menu bar hidden even while StableBar isn't running, so setup turns on
+/// Open at login for an app in Applications, unless the person turns it off.
+@Test @MainActor func setupTurnsOnOpenAtLogin() async throws {
     let (session, fixture, store, logins) = try loginSession(inApplications: true)
     defer { store.stop(); fixture.close() }
-    #expect(!session.opensAtLogin)
-    await session.place(.top)
     #expect(session.opensAtLogin)
+    await session.place(.top)
     session.finish()
     #expect(session.finished)
     #expect(logins() == [true])
@@ -151,12 +138,11 @@ func setupFinishesWithKeptChoicesForMissingWidgets(preset: SetupPreferences.Pres
     #expect(logins().isEmpty)
 }
 
-/// Keeping the menu bar, or running StableBar from outside Applications, leaves Open at login as it is.
-@Test(arguments: [(SetupPreferences.Placement.belowMenuBar, true), (.top, false)]) @MainActor
-func openAtLoginStaysAsItIsOtherwise(placement: SetupPreferences.Placement, inApplications: Bool) async throws {
-    let (session, fixture, store, logins) = try loginSession(inApplications: inApplications)
+/// Open at login needs StableBar in Applications, so from elsewhere setup leaves it as it is.
+@Test @MainActor func openAtLoginStaysAsItIsOutsideApplications() async throws {
+    let (session, fixture, store, logins) = try loginSession(inApplications: false)
     defer { store.stop(); fixture.close() }
-    await session.place(placement)
+    await session.place(.top)
     #expect(!session.opensAtLogin)
     session.finish()
     #expect(session.finished)

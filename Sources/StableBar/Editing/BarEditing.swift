@@ -5,7 +5,7 @@ import SwiftUI
 /// Presence in the normal bar, kept separate from the temporary edit-mode reveal.
 struct BarWidgetVisibility {
     enum Reason: String, Equatable {
-        case display, output, workspaces
+        case display, output, workspaces, appMenus
     }
 
     let reasons: [Reason]
@@ -54,6 +54,10 @@ final class BarEditing {
     var setupIsOpen = false {
         didSet { if setupIsOpen { end() } }
     }
+
+    /// The display whose bar setup's tour covers while its copy of the bar waits on the stage. That bar draws nothing
+    /// meanwhile, so each choice redraws only the copy.
+    var setupCoversDisplay: Int?
 
     var menuTitle: String { isActive ? "Finish Editing Bar" : "Edit Bar in Place" }
     var menuIcon: MenuIcon { isActive ? .finishEditing : .editBar }
@@ -114,7 +118,8 @@ final class BarEditing {
         perform(on: store.appWatcher.activeDisplayID) { try self.store?.customizationHistory.redo() }
     }
 
-    func visibility(of widget: WidgetConfiguration, on display: BarDisplay) -> BarWidgetVisibility {
+    /// `sampleAppMenus` tells whether App menus show sample menus while they have none of their own, as on setup's stage.
+    func visibility(of widget: WidgetConfiguration, on display: BarDisplay, sampleAppMenus: Bool = false) -> BarWidgetVisibility {
         guard let store else { return BarWidgetVisibility(reasons: []) }
         let presentation = store.barPresentation.presentations[widget.id]
         // The bar reads this while laying out every widget, so it observes `layout`, never `workspaces`.
@@ -130,13 +135,20 @@ final class BarEditing {
                                               hideWorkspaces: widget.workspace?.hideWorkspaces ?? [])) {
             reasons.append(.workspaces)
         }
+        // Without menus, App menus draw nothing unless the access warning shows in their place.
+        if case .appMenu = widget.content, widget.layout == nil, !sampleAppMenus, store.appMenu.items.isEmpty,
+           store.appMenu.isTrusted || store.appMenu.hidesAccessWarning {
+            reasons.append(.appMenus)
+        }
         return BarWidgetVisibility(reasons: reasons)
     }
 
     /// Turned-off widgets aren't on the bar, even while editing: removing a package or include
     /// widget turns it off, so it leaves the bar. Settings → Your bar can turn it on again.
-    func widgets(on display: BarDisplay) -> [WidgetConfiguration] {
-        (store?.configuration?.onScreen(ScreenKind(display)).widgets ?? []).filter { $0.enabled && (isActive || !visibility(of: $0, on: display).isHidden) }
+    func widgets(on display: BarDisplay, sampleAppMenus: Bool = false) -> [WidgetConfiguration] {
+        (store?.configuration?.onScreen(ScreenKind(display)).widgets ?? []).filter { widget in
+            widget.enabled && (isActive || !visibility(of: widget, on: display, sampleAppMenus: sampleAppMenus).isHidden)
+        }
     }
 
     /// Each widget's name, by its ID.
@@ -174,14 +186,15 @@ final class BarEditing {
                                                       menu: output?.menu ?? widget.menu ?? []) } == true
     }
 
-    func isMoving(_ id: String) -> Bool {
-        guard let movingID = dragSession.active?.widgetID ?? dropped?.id, let widgets = store?.configuration?.widgets,
-              let moving = widgets.first(where: { $0.id == movingID }),
+    func isMoving(_ id: String, on displayID: Int) -> Bool {
+        guard let movingID = dragSession.active?.widgetID ?? dropped?.id, let shared = store?.configuration else { return false }
+        let widgets = (screenKind(displayID).map(shared.onScreen) ?? shared).widgets
+        guard let moving = widgets.first(where: { $0.id == movingID }),
               let widget = widgets.first(where: { $0.id == id }) else { return false }
-        return widget.id == moving.id || (moving.group != nil && moving.group == widget.group)
+        return moving.movesWith(widget)
     }
 
-    func opacity(for id: String) -> Double { (dragSession.active != nil || slidingIn) && isMoving(id) ? 0 : 1 }
+    func opacity(for id: String, on displayID: Int) -> Double { (dragSession.active != nil || slidingIn) && isMoving(id, on: displayID) ? 0 : 1 }
 
     private var previewInsertion: BarEditInsertion? {
         insertion ?? (dragSession.active == nil ? dropped?.target : nil)
@@ -197,9 +210,9 @@ final class BarEditing {
             }
         }
         guard let insertion = previewInsertion else { return tray }
-        var arranged = tray.filter { !isMoving($0.id) }
+        var arranged = tray.filter { !isMoving($0.id, on: displayID) }
         if insertion.displayID == displayID, insertion.position == position {
-            arranged.insert(contentsOf: entries.filter { isMoving($0.id) },
+            arranged.insert(contentsOf: entries.filter { isMoving($0.id, on: displayID) },
                             at: arranged.firstIndex { $0.id == insertion.before } ?? arranged.endIndex)
         }
         return arranged
@@ -227,7 +240,7 @@ final class BarEditing {
     func finishDrop() {
         guard let dropped, slidingIn, let store else { return }
         slidingIn = false
-        pendingDrops.append((store.configuration!.widgets.filter { isMoving($0.id) }.map(\.id), dropped.target, dropped.token))
+        pendingDrops.append((store.configuration!.widgets.filter { isMoving($0.id, on: dropped.target.displayID) }.map(\.id), dropped.target, dropped.token))
         enqueue(on: dropped.target.displayID) {
             defer {
                 var transaction = Transaction()

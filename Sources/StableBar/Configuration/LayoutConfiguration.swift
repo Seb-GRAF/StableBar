@@ -13,9 +13,11 @@ struct WidgetGroupConfiguration: Decodable, Sendable {
         members = try values.decodeIfPresent([WidgetGroupMember].self, forKey: .members) ?? []
     }
 
+    var takesOthers: Bool { members.contains(where: \.others) }
+
     /// `widgets`, each enabled one without a `group` in the group whose `members` match it best, unless that group's
-    /// widgets sit in another position. Widgets with their own `group` settle a group's position first. `ownGroup`
-    /// can stand in for a widget's own `group`, to see where a widget would go without it.
+    /// widgets sit in another position and it doesn't take others. Widgets with their own `group` settle a group's
+    /// position first. `ownGroup` can stand in for a widget's own `group`, to see where a widget would go without it.
     static func joining(_ widgets: [WidgetConfiguration], groups: [String: WidgetGroupConfiguration],
                         ownGroup: (WidgetConfiguration) -> String? = \.ownGroup) -> [WidgetConfiguration] {
         var positions: [String: WidgetPosition] = [:]
@@ -28,10 +30,10 @@ struct WidgetGroupConfiguration: Decodable, Sendable {
             let widget = joined[index]
             guard ownGroup(widget) == nil, widget.enabled else { continue }
             let matches = groups.sorted { $0.key < $1.key }.flatMap { id, group in
-                group.members.filter { $0.matches(widget) }.map { (group: id, rank: ($0.id == nil ? 0 : 1, $0.keyCount)) }
+                group.members.filter { $0.matches(widget) }.map { (group: id, rank: ($0.others ? -1 : $0.id == nil ? 0 : 1, $0.keyCount)) }
             }
             guard let best = matches.first(where: { match in !matches.contains { $0.rank > match.rank } }),
-                  (positions[best.group] ?? widget.position) == widget.position else { continue }
+                  groups[best.group]!.takesOthers || (positions[best.group] ?? widget.position) == widget.position else { continue }
             positions[best.group] = widget.position
             joined[index].joinedGroup = best.group
         }
@@ -44,8 +46,10 @@ struct WidgetGroupMember: Decodable, Equatable, Sendable {
     let type: String?
     let role: PresentationRole?
     let id: String?
+    /// Takes the widgets other than spacers that no other selector names, by ranking below every selector that names one.
+    var others = false
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case type, role, id }
+    enum CodingKeys: String, CodingKey, CaseIterable { case type, role, id, others }
 
     init(type: String?, role: PresentationRole?, id: String?) {
         self.type = type
@@ -64,15 +68,17 @@ struct WidgetGroupMember: Decodable, Equatable, Sendable {
         }
         role = try values.decodeIfPresent(PresentationRole.self, forKey: .role)
         id = try values.decodeIfPresent(String.self, forKey: .id)
+        others = try values.decodeIfPresent(Bool.self, forKey: .others) ?? false
         guard keyCount > 0 else {
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Name a type, role or id."))
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Name a type, role or id, or set others to true."))
         }
     }
 
-    var keyCount: Int { [type != nil, role != nil, id != nil].filter { $0 }.count }
+    var keyCount: Int { [type != nil, role != nil, id != nil, others].filter { $0 }.count }
 
     func matches(_ widget: WidgetConfiguration) -> Bool {
         (type == nil || type == widget.typeName) && (role == nil || role == widget.role) && (id == nil || id == widget.id)
+            && !(others && widget.content == .spacer)
     }
 }
 
@@ -104,7 +110,7 @@ struct BarUnit: Identifiable {
         var units: [BarUnit] = []
         for widget in widgets {
             if let group = widget.group {
-                let id = "group:\(group)"
+                let id = groups[group]!.takesOthers ? "group-\(widget.position.rawValue):\(group)" : "group:\(group)"
                 if let index = units.firstIndex(where: { $0.id == id }) {
                     units[index].widgets.append(widget)
                 } else {
@@ -174,6 +180,8 @@ struct AdaptiveBarPlan {
     var overflow: [BarOverflow] = []
     var cramped: Set<String> = []
     var segments: [BarSegment] = []
+    /// The middle of the gap after each placed item that another one follows side by side, by the first one's ID.
+    var dividers: [String: CGFloat] = [:]
 }
 
 struct AdaptiveBarPlanner {
@@ -201,6 +209,16 @@ struct AdaptiveBarPlanner {
         } else {
             segment(items, start: inset, end: width - inset, buttonAtEnd: true, atNotch: nil,
                     positions: [.left, .notchLeft, .center, .notchRight, .right], result: &result)
+        }
+        // The positions the bar draws side by side: beside a notch, `center` runs into `right`.
+        let runs: [[WidgetPosition]] = notch == nil ? [[.left], [.notchLeft, .center, .notchRight], [.right]]
+            : [[.left], [.notchLeft], [.notchRight], [.center, .right]]
+        for run in runs {
+            let placed = run.flatMap { position in items.filter { $0.position == position && result.placements[$0.id] != nil } }
+            for (item, next) in zip(placed, placed.dropFirst()) where !item.isSpacer && !next.isSpacer {
+                let placement = result.placements[item.id]!
+                result.dividers[item.id] = (placement.x + placement.width + result.placements[next.id]!.x) / 2
+            }
         }
         return result
     }

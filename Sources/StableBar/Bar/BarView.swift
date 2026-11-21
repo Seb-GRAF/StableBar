@@ -50,17 +50,20 @@ struct BarView: View {
     @State private var narrowestWidths: [String: CGFloat] = [:]
     @FocusState private var focusedWidget: String?
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.sampleAppMenus) private var sampleAppMenus
 
     var body: some View {
         ZStack(alignment: .top) {
             // The edit bar starts from the widths this bar measured, so switching draws every widget where it was.
             if store.barEditing.isActive && !preview {
                 BarEditStart(store: store, display: display, widths: $restingWidths)
+            } else if store.barEditing.setupCoversDisplay == display.id && !preview {
+                EmptyView()
             } else if let config = store.configuration?.onScreen(ScreenKind(display)) {
                 let scale = CGFloat(config.bar.scale(for: display))
                 let barGeometry = config.barGeometry(for: display)
                 let notch = config.bar.layoutNotch(on: display)
-                let widgets = store.barEditing.widgets(on: display)
+                let widgets = store.barEditing.widgets(on: display, sampleAppMenus: !sampleAppMenus.isEmpty)
                 let units = BarUnit.make(widgets: widgets + [store.update?.widget, store.packageLibrary.updateWidget].compactMap { $0 }, groups: config.groups)
                 PlacedUnits(store: store, display: display, nativeDecorations: nativeDecorations, preview: preview, config: config,
                             units: units, scale: scale, notch: notch, measuredWidths: $measuredWidths, measuredUnits: $measuredUnits,
@@ -106,6 +109,18 @@ struct BarView: View {
     }
 }
 
+/// The line `bar.divider` draws between two units, once it has a background.
+struct BarDividerLine: View {
+    let divider: WidgetStyle
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: divider.cornerRadius ?? 0)
+            .fill(divider.background!.shapeStyle)
+            .frame(width: divider.width ?? 1, height: divider.height ?? 16)
+            .opacity(divider.opacity ?? 1)
+    }
+}
+
 struct PlacedUnits: View {
     let store: BarStore
     let display: BarDisplay
@@ -144,6 +159,17 @@ struct PlacedUnits: View {
             let visible = Set(units.filter { plan.placements[$0.id] != nil }.flatMap { $0.widgets.map(\.id) })
             ZStack(alignment: .topLeading) {
                 Color.clear.allowsHitTesting(false)
+                if let divider = config.bar.divider, divider.background != nil {
+                    let width = divider.width ?? 1
+                    ForEach(plan.dividers.keys.sorted(), id: \.self) { id in
+                        BarDividerLine(divider: divider)
+                            .frame(height: geometry.size.height / scale)
+                            .offset(x: plan.dividers[id]! - width / 2)
+                            .allowsHitTesting(false)
+                            // Above the units, whose tiles meet over it when `spacing` is 0.
+                            .zIndex(1)
+                    }
+                }
                 ForEach(units) { unit in
                     if let placement = plan.placements[unit.id] {
                         let alignment: Alignment = switch unit.position {
@@ -370,4 +396,6 @@ extension EnvironmentValues {
     @Entry var fixedDate: Date?
     /// Draws without the network, as a render does: remote images stay empty.
     @Entry var offline = false
+    /// Drawn by `OffscreenSnapshot`, for an image rather than the screen.
+    @Entry var offscreenSnapshot = false
 }

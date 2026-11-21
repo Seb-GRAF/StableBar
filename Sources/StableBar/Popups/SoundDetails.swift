@@ -186,6 +186,7 @@ struct SoundDetails: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Image(nsImage: appIcon(app.id)).resizable().frame(width: 18, height: 18)
+                    .styledAppIcon(appearance.appIcons, color: appearance.foreground)
                 Text(app.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
                 if app.playing {
                     Equalizer(playing: true, height: 9).foregroundStyle(appearance.accent).fixedSize()

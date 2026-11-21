@@ -71,7 +71,8 @@ struct BarEditView: View {
                         }
                         ForEach(units) { unit in
                             let frame = layout.frames[unit.id]!
-                            let lifted = editing.opacity(for: unit.widgets[0].id) == 0
+                            // A pill that takes others can gain a dragged widget while the rest of it stays.
+                            let lifted = unit.widgets.allSatisfy { editing.opacity(for: $0.id, on: display.id) == 0 }
                             let shape = RoundedRectangle(cornerRadius: 6)
                             ZStack {
                                 // Where the dragged widget lands.
@@ -83,6 +84,7 @@ struct BarEditView: View {
                                     ForEach(unit.widgets) { widget in
                                         BarEditTile(store: store, display: display.id, kind: ScreenKind(display),
                                                     entry: entries.first { $0.id == widget.id }!, config: config)
+                                            .opacity(editing.opacity(for: widget.id, on: display.id))
                                     }
                                 }
                                 .fixedSize()
@@ -467,7 +469,7 @@ struct BarEditTile: View {
             Button("Leave Group") { editing.leaveGroup(entry.id, on: display) }
                 .disabled(!grouping.canLeave(entry.id))
         } else {
-            let choices = grouping.choices(for: entry.id, among: editing.widgets(on: screen))
+            let choices = grouping.choices(for: entry.id, among: editing.widgets(on: screen), groups: store.configuration?.onScreen(kind).groups ?? [:])
             if !choices.isEmpty { Divider() }
             ForEach(choices, id: \.self) { choice in
                 Button(choice.title(names: editing.names)) { editing.group(entry.id, choice, on: display) }

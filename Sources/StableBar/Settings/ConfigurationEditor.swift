@@ -94,7 +94,8 @@ final class ConfigurationEditor {
     func group(_ id: String, _ choice: WidgetGrouping.Choice) {
         let grouping = WidgetGrouping(store: store)
         let group = grouping.group(of: choice)
-        change(grouping.edits(choice, for: id))
+        do { change(try grouping.edits(choice, for: id)) }
+        catch { self.error = errorMessage(error) }
         if error == nil, case .groupWith = choice { showGroup(group) }
     }
 
@@ -216,7 +217,7 @@ final class ConfigurationEditor {
     func style(for id: String) -> [String: ConfigurationValue] {
         guard let configuration = store.configuration,
               let widget = configuration.widgets.first(where: { $0.id == id }) else { return [:] }
-        let style = resolveStyle([configuration.defaults, configuration.roleStyle(widget.role), widget.style])
+        let style = resolveStyle([configuration.defaults, configuration.roleStyle(widget.role), configuration.groupStyle(of: widget), widget.style])
         if case let .object(properties) = style.configurationValue { return properties }
         return [:]
     }

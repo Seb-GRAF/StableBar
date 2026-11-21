@@ -1,31 +1,42 @@
 import Foundation
 
 struct SetupPreferences: Equatable, Codable, Sendable {
-    enum Appearance: String, CaseIterable, Codable, Sendable {
-        case current = "Keep current", automatic = "Automatic", light = "Light", dark = "Dark"
-    }
-
     enum Placement: String, CaseIterable, Codable, Sendable {
-        case current = "Keep current", top = "Top edge", belowMenuBar = "Below menu bar", bottom = "Bottom edge"
+        case current = "Keep current", top = "Top edge", belowMenuBar = "Below menu bar"
     }
 
-    enum Clock: String, CaseIterable, Codable, Sendable {
-        case current = "Keep current", twentyFourHour = "24-hour", twelveHour = "12-hour"
+    /// The region's hour cycle, or the 24- or 12-hour one earlier setups offered, which a starter's clock can still have.
+    enum Clock {
+        case current, twentyFourHour, twelveHour
     }
 
     enum Theme: Hashable, Codable, Sendable {
-        case current, builtIn, package(id: String, version: String?)
+        case current, package(id: String, version: String?)
     }
 
     enum WidgetSet: Hashable, Codable, Sendable {
-        case system, meetings, workspaces(WorkspaceSource), battery, sound, menuBarItems
+        case appleMenu, appMenu(expandsOnHover: Bool), workspaces(WorkspaceSource, showsApps: Bool = true), system, systemMeters, systemRings,
+             meetings, privacy, sound, battery, batteryLevel, batteryRing, dateAndTime, dayAndTime, menuBarItems
+        /// A Store package's widget, which setup adds once the package's review has, starting from `settings`.
+        case store(id: String, name: String, position: WidgetPosition, settings: [String: String] = [:])
 
         enum State {
             case available, added, disabled, conflict
         }
 
+        /// A set of several widgets, such as the date and the time, conflicts when one of them does, so it goes on the
+        /// bar whole or not at all.
         func state(in configuration: Configuration) -> State {
-            let template = try! ConfigurationValue.object(widgets[0]).decoded(WidgetConfiguration.self)
+            if case let .store(id, _, _, _) = self {
+                guard let widget = configuration.widgets.first(where: { $0.id == id }) else { return .available }
+                return widget.enabled ? .added : .disabled
+            }
+            let states = widgets.map { Self.state(of: $0, in: configuration) }
+            return states.contains(.conflict) ? .conflict : states.contains(.available) ? .available : states.contains(.disabled) ? .disabled : .added
+        }
+
+        private static func state(of widget: [String: ConfigurationValue], in configuration: Configuration) -> State {
+            let template = try! ConfigurationValue.object(withoutLayout(widget)).decoded(WidgetConfiguration.self)
             guard let widget = configuration.widgets.first(where: { $0.id == template.id }) else { return .available }
             let matches: Bool
             switch (template.content, widget.content) {
@@ -40,22 +51,138 @@ struct SetupPreferences: Equatable, Codable, Sendable {
 
         var title: String {
             switch self {
-            case .system: "System"
-            case .meetings: "Meetings"
+            case .appleMenu: "Apple menu"
+            case .appMenu: "App menus"
             case .workspaces: "Workspaces"
-            case .battery: "Battery"
+            case .system, .systemMeters, .systemRings: "System"
+            case .meetings: "Meetings"
+            case .privacy: "Microphone & camera"
             case .sound: "Sound"
+            case .battery, .batteryLevel, .batteryRing: "Battery"
+            case .dateAndTime, .dayAndTime: "Date and time"
             case .menuBarItems: "Menu bar items"
+            case let .store(_, name, _, _): name
             }
         }
 
-        var symbol: String {
-            WidgetAddCatalog.builtIns.first { $0.properties?["type"] == widgets[0]["type"] }!.symbol
+        /// The IDs its widgets have on the bar.
+        var ids: [String] {
+            if case let .store(id, _, _, _) = self { [id] } else { widgets.map(SetupPreferences.id) }
         }
 
+        /// The built-in widgets of this set; a Store widget has none.
         var widgets: [[String: ConfigurationValue]] {
-            let json = switch self {
-            case .system: #"""
+            let json: String
+            switch self {
+            case .appleMenu: json = #"[{ "id": "apple", "type": "appleMenu", "position": "left" }]"#
+            case let .appMenu(expandsOnHover):
+                json = expandsOnHover ? #"[{ "id": "app-menu", "type": "appMenu", "position": "left", "expandOnHover": true }]"#
+                    : #"[{ "id": "app-menu", "type": "appMenu", "position": "left" }]"#
+            case let .workspaces(_, showsApps):
+                json = showsApps ? #"[{ "id": "workspaces", "type": "workspaces", "position": "left" }]"#
+                    : #"[{ "id": "workspaces", "type": "workspaces", "position": "left", "workspace": { "showApps": false } }]"#
+            case .systemMeters: json = #"""
+                [
+                  {
+                    "id": "system-monitor", "type": "system", "position": "right", "details": true,
+                    "layout": {
+                      "type": "row", "style": { "spacing": 14 },
+                      "children": [
+                        {
+                          "type": "row", "style": { "spacing": 6 },
+                          "children": [
+                            { "type": "text", "text": "CPU", "role": "key", "style": { "fontWeight": "medium" } },
+                            { "type": "field", "field": "text", "alignment": "trailing", "style": { "minWidth": 37 } },
+                            { "type": "progress", "source": "cpu", "height": 4, "role": "meter", "style": { "width": 32 } }
+                          ]
+                        },
+                        {
+                          "type": "row", "style": { "spacing": 6 },
+                          "children": [
+                            { "type": "text", "text": "MEM", "role": "key", "style": { "fontWeight": "medium" } },
+                            {
+                              "type": "row", "alignment": "trailing", "style": { "spacing": 0, "minWidth": 37 },
+                              "children": [{ "type": "field", "field": "memory" }, { "type": "text", "text": "%" }]
+                            },
+                            { "type": "progress", "source": "memory", "height": 4, "role": "meter", "style": { "width": 32 } }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+                """#
+            case .batteryLevel: json = #"""
+                [
+                  {
+                    "id": "battery", "type": "battery", "position": "right", "details": true,
+                    "layout": { "type": "row", "children": [{ "type": "battery" }, { "type": "field", "field": "text" }] }
+                  }
+                ]
+                """#
+            case .systemRings: json = #"""
+                [
+                  {
+                    "id": "system-monitor", "type": "system", "position": "right", "details": true,
+                    "layout": {
+                      "type": "row", "style": { "spacing": 10 },
+                      "children": [
+                        {
+                          "type": "row", "style": { "spacing": 5 },
+                          "children": [
+                            {
+                              "type": "ring", "source": "cpu", "lineWidth": 2, "style": { "iconSize": 18, "background": "@token.track" },
+                              "children": [{ "type": "symbol", "name": "cpu", "style": { "iconSize": 8.5 } }]
+                            },
+                            { "type": "field", "field": "text" }
+                          ]
+                        },
+                        {
+                          "type": "row", "style": { "spacing": 5 },
+                          "children": [
+                            {
+                              "type": "ring", "source": "memory", "lineWidth": 2, "style": { "iconSize": 18, "background": "@token.track" },
+                              "children": [{ "type": "symbol", "name": "memorychip", "style": { "iconSize": 8.5 } }]
+                            },
+                            {
+                              "type": "row", "style": { "spacing": 0 },
+                              "children": [{ "type": "field", "field": "memory" }, { "type": "text", "text": "%" }]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+                """#
+            case .batteryRing: json = #"""
+                [
+                  {
+                    "id": "battery", "type": "battery", "position": "right", "details": true,
+                    "layout": {
+                      "type": "row", "style": { "spacing": 5 },
+                      "children": [
+                        {
+                          "type": "ring", "source": "percent", "lineWidth": 2, "style": { "iconSize": 18, "background": "@token.track" },
+                          "children": [{ "type": "symbol", "source": "icon", "style": { "iconSize": 8.5 } }]
+                        },
+                        { "type": "field", "field": "text" }
+                      ]
+                    }
+                  }
+                ]
+                """#
+            case .privacy: json = #"[{ "id": "privacy", "type": "privacy", "position": "right" }]"#
+            case .dateAndTime, .dayAndTime:
+                // The Mac's own date order and hour cycle, as the starter's clock has.
+                return [
+                    ["id": .string("date"), "type": .string("clock"), "position": .string("right"), "role": .string("secondary"), "details": .bool(true),
+                     "format": .string(SetupPreferences.dateFormat(self == .dateAndTime ? "EEEdMMM" : "EEEd", or: self == .dateAndTime ? "EEE d MMM" : "EEE d"))],
+                    ["id": .string("clock"), "type": .string("clock"), "position": .string("right"), "role": .string("time"), "details": .bool(true),
+                     "format": .string(SetupPreferences.timeFormat())]
+                ]
+            case .store: return []
+            case .system: json = #"""
                 [
                   {
                     "id": "system-monitor", "type": "system", "position": "right",
@@ -104,147 +231,134 @@ struct SetupPreferences: Equatable, Codable, Sendable {
                   }
                 ]
                 """#
-            case .meetings: #"""
+            case .meetings: json = #"""
                 [
                   {
-                    "id": "meeting", "type": "calendar", "position": "right",
+                    "id": "meeting", "type": "calendar", "position": "center", "priority": 1, "details": true,
                     "layout": {
-                      "type": "row",
+                      "type": "row", "hideWhen": { "field": "phase", "equals": "none" }, "style": { "spacing": 6 },
                       "children": [
-                        { "type": "symbol", "source": "icon" },
-                        { "type": "field", "field": "text" },
-                        { "type": "field", "field": "start", "hideWhenEmpty": "start", "role": "secondary" }
+                        { "type": "symbol", "name": "calendar", "hideWhen": { "field": "phase", "equals": "live" } },
+                        {
+                          "type": "symbol", "name": "circle.fill", "showWhen": { "field": "phase", "equals": "live" },
+                          "style": { "iconSize": 7, "foreground": { "light": "#28a745", "dark": "#30d158" } }
+                        },
+                        { "type": "field", "field": "title", "style": { "maxWidth": 170 } },
+                        { "type": "field", "field": "start", "role": "secondary", "showWhen": { "field": "phase", "equals": "later" } },
+                        {
+                          "type": "row", "showWhen": [{ "field": "phase", "equals": "soon" }, { "field": "phase", "equals": "now" }],
+                          "style": { "spacing": 3, "foreground": "@token.warning" },
+                          "children": [{ "type": "text", "text": "in" }, { "type": "field", "field": "minutes" }, { "type": "text", "text": "min" }]
+                        },
+                        {
+                          "type": "row", "showWhen": { "field": "phase", "equals": "live" }, "role": "secondary", "style": { "spacing": 3 },
+                          "children": [{ "type": "field", "field": "minutes" }, { "type": "text", "text": "min left" }]
+                        },
+                        {
+                          "type": "text", "text": "Join", "hideWhenEmpty": "joinCommand", "hideWhen": { "field": "phase", "equals": "later" },
+                          "onClickField": "joinCommand",
+                          "style": {
+                            "background": { "light": "#34c75938", "dark": "#30d15847" }, "cornerRadius": 8,
+                            "paddingHorizontal": 8, "paddingVertical": 2, "fontWeight": "semibold"
+                          }
+                        }
                       ]
-                    },
-                    "popup": {
-                      "style": { "width": 320 },
-                      "layout": {
-                        "type": "column",
-                        "children": [
-                          { "type": "text", "text": "Today", "role": "heading" },
-                          {
-                            "type": "list", "source": "today",
-                            "row": {
-                              "type": "row", "openField": "link",
-                              "children": [
-                                { "type": "field", "field": "start", "role": "key", "style": { "width": 56 } },
-                                { "type": "field", "field": "title", "role": "primary" }
-                              ]
-                            }
-                          },
-                          { "type": "divider", "role": "separator" },
-                          { "type": "text", "text": "Calendar", "open": "com.apple.iCal", "role": "button" }
-                        ]
-                      }
                     }
                   }
                 ]
                 """#
-            case .workspaces: #"[{ "id": "workspaces", "type": "workspaces", "position": "left" }]"#
-            case .battery: #"[{ "id": "battery", "type": "battery", "position": "right", "details": true }]"#
-            case .sound: #"[{ "id": "sound", "type": "audio", "position": "right" }]"#
-            case .menuBarItems: #"[{ "id": "menu-bar-items", "type": "menuBarItems", "position": "right" }]"#
+            case .battery: json = #"[{ "id": "battery", "type": "battery", "position": "right", "details": true }]"#
+            case .sound: json = #"[{ "id": "sound", "type": "audio", "position": "right" }]"#
+            case .menuBarItems: json = #"[{ "id": "menu-bar-items", "type": "menuBarItems", "position": "right" }]"#
             }
             return try! JSONDecoder().decode([[String: ConfigurationValue]].self, from: Data(json.utf8))
         }
     }
 
     enum Preset: String, CaseIterable, Codable, Sendable {
-        case minimal, developer, workday, notch, everything
+        case everyday, minimal, developer, workday, dashboard
 
         var title: String {
             switch self {
+            case .everyday: "Everyday"
             case .minimal: "Minimal"
             case .developer: "Developer"
             case .workday: "Workday"
-            case .notch: "Notch"
-            case .everything: "Everything"
+            case .dashboard: "Dashboard"
             }
         }
 
-        var detail: String {
+        /// What the preset is for, in a line its card fits.
+        var summary: String {
             switch self {
-            case .minimal: "Built-in theme"
-            case .developer: "Phosphor theme, dark"
-            case .workday: "Léman theme"
-            case .notch: "Notch theme"
-            case .everything: "Catppuccin theme"
+            case .everyday: "Music, weather and the date."
+            case .minimal: "The app, battery and time."
+            case .developer: "Code, servers and AI limits."
+            case .workday: "Meetings, mic and camera."
+            case .dashboard: "Your Mac at a glance."
             }
         }
 
         var symbol: String {
             switch self {
+            case .everyday: "sun.max"
             case .minimal: "minus"
             case .developer: "chevron.left.forwardslash.chevron.right"
             case .workday: "calendar"
-            case .notch: "macbook"
-            case .everything: "square.grid.2x2"
+            case .dashboard: "gauge.with.dots.needle.67percent"
             }
         }
 
-        /// Notch only blends into a connected display's notch on the top edge.
-        /// A Notch preset already chosen stays offered, so it can still be deselected.
-        static func offered(on placement: Placement, hasNotchedDisplay: Bool, keeping selected: Preset? = nil) -> [Preset] {
-            allCases.filter { $0 != .notch || (placement == .top && hasNotchedDisplay) || $0 == selected }
-        }
-
-        /// Below the macOS menu bar, a preset leaves out Menu bar items, which the menu bar shows right above it.
-        /// The preset's choices. Its widget sets keep Menu bar items wherever the bar sits: setup leaves them out
-        /// below the menu bar when it applies them, so a later move to the top edge still brings them. On a Mac
-        /// without an internal battery, Battery would only show a plug and "AC", so the preset leaves it out.
+        /// The preset's bar where it sits. Below the macOS menu bar, it leaves out what the menu bar right above it
+        /// shows: the Apple menu, the app's menus, the date and time, and Menu bar items. On a Mac without an internal
+        /// battery, Battery would only show a plug and "AC", so the preset leaves it out.
         func preferences(workspaces: WorkspaceSource, placement: Placement, hasBattery: Bool = true) -> SetupPreferences {
-            var preferences = basePreferences(workspaces: workspaces, placement: placement)
-            preferences.workspaces = workspaces
-            if !hasBattery { preferences.widgetSets.removeAll { $0 == .battery } }
+            var preferences = SetupPreferences(placement: placement, widgetSets: widgetSets(workspaces: workspaces, below: placement == .belowMenuBar),
+                                               workspaces: workspaces)
+            if !hasBattery { preferences.widgetSets.removeAll { [.battery, .batteryLevel, .batteryRing].contains($0) } }
             return preferences
         }
 
-        /// The widget sets the preset's tile shows for a bar at `placement`: below the menu bar, without Menu bar items.
-        func shownWidgetSets(workspaces: WorkspaceSource, placement: Placement, hasBattery: Bool = true) -> [WidgetSet] {
-            preferences(workspaces: workspaces, placement: placement, hasBattery: hasBattery).widgetSets
-                .filter { placement != .belowMenuBar || $0 != .menuBarItems }
+        func accessibilityLabel(widgetSets: [WidgetSet]) -> String {
+            "\(title). Widgets: \(widgetSets.map(\.title).joined(separator: ", "))."
         }
 
-        /// Names the tile's widget picture, including the starter's dimmed widgets, without reading symbol names.
-        func accessibilityLabel(widgetSets: [WidgetSet], placement: Placement) -> String {
-            let additions = widgetSets.filter { if case .workspaces = $0 { false } else { $0 != .menuBarItems } }
-            let names: [String]
-            if placement == .belowMenuBar {
-                names = ["Workspaces", "System"] + additions.filter { $0 != .system }.map(\.title)
-            } else {
-                let workspaces = widgetSets.filter { if case .workspaces = $0 { true } else { false } }
-                names = ["Apple menu"] + workspaces.map(\.title) + ["App menus"] + additions.map(\.title)
-                    + ["Clock"] + (widgetSets.contains(.menuBarItems) ? ["Menu bar items"] : [])
+        private func widgetSets(workspaces: WorkspaceSource, below: Bool) -> [WidgetSet] {
+            let nowPlaying = WidgetSet.store(id: "now-playing", name: "Now playing", position: .center)
+            let weather = WidgetSet.store(id: "weather", name: "Weather", position: .right)
+            let sets: [WidgetSet] = switch self {
+            case .everyday: [.appleMenu, .appMenu(expandsOnHover: false), nowPlaying, weather, .sound, .batteryLevel, .dateAndTime, .menuBarItems]
+            case .minimal where below: [.workspaces(workspaces, showsApps: false), .battery]
+            case .minimal: [.appleMenu, .appMenu(expandsOnHover: true), .battery, .dayAndTime, .menuBarItems]
+            case .developer:
+                [.appleMenu, .workspaces(workspaces), .appMenu(expandsOnHover: true),
+                 .store(id: "dev-servers", name: "Development servers", position: .right),
+                 .store(id: "ai-usage", name: "AI usage", position: .right, settings: ["layout": "One line"]),
+                 .systemMeters, .battery, .dateAndTime, .menuBarItems]
+            case .workday:
+                [.appleMenu, .appMenu(expandsOnHover: false), .meetings, .store(id: "dock-badges", name: "Dock badges", position: .right), .privacy,
+                 .sound, .battery, .dateAndTime, .menuBarItems]
+            case .dashboard:
+                [.appleMenu, .workspaces(workspaces), .appMenu(expandsOnHover: true), nowPlaying, weather, .systemRings, .batteryRing, .sound,
+                 .dateAndTime, .menuBarItems]
             }
-            return "\(title). \(detail). Widgets: \(names.joined(separator: ", "))."
-        }
-
-        private func basePreferences(workspaces: WorkspaceSource, placement: Placement) -> SetupPreferences {
-            switch self {
-            case .minimal: SetupPreferences(placement: placement, theme: .builtIn, widgetSets: [.sound, .menuBarItems])
-            case .developer: SetupPreferences(appearance: .dark, placement: placement, theme: .package(id: "phosphor", version: nil),
-                                              widgetSets: [.workspaces(workspaces), .system, .sound, .battery, .menuBarItems])
-            case .workday: SetupPreferences(placement: placement, theme: .package(id: "leman", version: nil),
-                                            widgetSets: [.meetings, .sound, .battery, .menuBarItems])
-            case .notch: SetupPreferences(placement: placement, theme: .package(id: "notch", version: nil), widgetSets: [.sound, .battery, .menuBarItems])
-            case .everything: SetupPreferences(placement: placement, theme: .package(id: "catppuccin", version: nil),
-                                               widgetSets: [.workspaces(workspaces), .meetings, .system, .sound, .battery, .menuBarItems])
-            }
+            guard below else { return sets }
+            return sets.filter { set in !set.widgets.contains { SetupPreferences.menuBarWidgetIDs.contains(SetupPreferences.id($0)) } }
         }
     }
 
-    var appearance = Appearance.current
     var placement = Placement.current
-    var clock = Clock.current
     var theme = Theme.current
+    /// The preset's widgets in bar order, which replace the bar's.
     var widgetSets: [WidgetSet] = []
     /// The source of a starter bar's Workspaces, as setup detects it; nil leaves the configuration's source.
     var workspaces: WorkspaceSource?
     var keepWindowsClear: Bool?
-    var keepNotificationsClear: Bool?
     var deferMeetings = false
     /// The Store packages picked under Found on your Mac, with the settings their review chose.
     var packages: [Package] = []
+    /// The Store packages of the preset's widgets that their review added, with the settings it chose.
+    var storeWidgets: [Package] = []
 
     struct Package: Equatable, Codable, Sendable {
         let id: String
@@ -252,13 +366,12 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         let settings: [String: ConfigurationValue]
     }
 
-    /// Presets own appearance, theme and widget sets. Every other choice stays, even a clock or Meetings choice
-    /// this preset doesn't use: it applies again after another change.
+    /// Presets own widget sets and the Store widgets their review added. Every other choice stays, even a Meetings
+    /// choice this preset doesn't use: it applies again after another change.
     func replacingPresetChoices(with preset: SetupPreferences) -> SetupPreferences {
         var merged = self
-        merged.appearance = preset.appearance
-        merged.theme = preset.theme
         merged.widgetSets = preset.widgetSets
+        merged.storeWidgets = preset.storeWidgets
         return merged
     }
 
@@ -336,19 +449,25 @@ struct SetupPreferences: Equatable, Codable, Sendable {
     /// StableBar's clock, day, date, two spaces and time, in `locale`'s date order and its hour cycle, or the 24- or
     /// 12-hour one `hours` picks: `EEE d MMM  HH:mm` in the UK, `EEE MMM d  h:mm a` in the US.
     static func clockFormat(locale: Locale = .current, hours: Clock = .current) -> String {
-        func pattern(_ template: String, or fallback: String) -> String {
-            (DateFormatter.dateFormat(fromTemplate: template, options: 0, locale: locale) ?? fallback)
-                .replacingOccurrences(of: ",", with: "")
-                .replacingOccurrences(of: "\u{202F}", with: " ")
-                .replacingOccurrences(of: "\u{00A0}", with: " ")
-        }
+        dateFormat("EEEdMMM", or: "EEE d MMM", locale: locale) + "  " + timeFormat(locale: locale, hours: hours)
+    }
+
+    /// The time alone, in `locale`'s hour cycle or the 24- or 12-hour one `hours` picks.
+    static func timeFormat(locale: Locale = .current, hours: Clock = .current) -> String {
         // The 24- and 12-hour choices keep their own time pattern: macOS can force a template to the other hour cycle.
-        let time = switch hours {
+        switch hours {
         case .twentyFourHour: "HH:mm"
         case .twelveHour: "h:mm a"
-        case .current: pattern("jmm", or: "HH:mm")
+        case .current: dateFormat("jmm", or: "HH:mm", locale: locale)
         }
-        return pattern("EEEdMMM", or: "EEE d MMM") + "  " + time
+    }
+
+    /// `template` in `locale`'s order, without commas and with plain spaces.
+    static func dateFormat(_ template: String, or fallback: String, locale: Locale = .current) -> String {
+        (DateFormatter.dateFormat(fromTemplate: template, options: 0, locale: locale) ?? fallback)
+            .replacingOccurrences(of: ",", with: "")
+            .replacingOccurrences(of: "\u{202F}", with: " ")
+            .replacingOccurrences(of: "\u{00A0}", with: " ")
     }
 
     /// The bundled starter as a new configuration starts: its clock in the Mac's date order and hour cycle. Any other
@@ -376,6 +495,12 @@ struct SetupPreferences: Equatable, Codable, Sendable {
 
     /// The widgets of the menu bar starter that repeat the macOS menu bar.
     static let menuBarWidgetIDs: Set<String> = ["apple", "app-menu", "clock", "menu-bar-items"]
+
+    /// `widget` without its layout, which can name the theme's tokens that only the loader has. Telling widgets apart
+    /// doesn't need it.
+    private static func withoutLayout(_ widget: [String: ConfigurationValue]) -> [String: ConfigurationValue] {
+        widget.filter { $0.key != "layout" }
+    }
 
     private static func widgets(_ json: String) -> [[String: ConfigurationValue]] {
         try! JSONDecoder().decode([[String: ConfigurationValue]].self, from: Data(json.utf8))
@@ -432,21 +557,24 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         let ids = widgets.map(Self.id)
         func swap(to starter: [[String: ConfigurationValue]]) -> StarterChange? {
             var swapped = document
-            swapped["widgets"] = .array(starter.map(ConfigurationValue.object))
+            swapped["widgets"] = .array(starter.map { .object(Self.withoutLayout($0)) })
             // Profiles apply through the loader; the bar the starter swaps to doesn't need them.
             swapped["profiles"] = nil
             swapped["profile"] = nil
             guard let data = try? JSONEncoder().encode(swapped),
                   let target = try? JSONDecoder().decode(Configuration.self, from: data) else { return nil }
-            let starterIDs = starter.map(Self.id)
-            return StarterChange(configuration: target, removed: ids.filter { !starterIDs.contains($0) },
-                                 added: starter.filter { !ids.contains(Self.id($0)) },
+            return StarterChange(configuration: target, removed: widgets.filter { !starter.contains($0) }.map(Self.id),
+                                 added: starter.filter { !widgets.contains($0) },
                                  isBelowMenuBarStarter: starter == Self.belowMenuBarStarter)
         }
         // Widgets from includes or packages, or overrides and layouts in the file or its profiles, mean the bar has
         // changed, even when its file still lists a starter.
         let changed = Self.changedIDs(in: document)
         let isStarter = configuration.widgets.map(\.id) == ids && changed.isDisjoint(with: ids)
+        let presetBar = widgetSets.flatMap(added)
+        if isStarter, !presetBar.isEmpty, Self.isMenuBarStarter(widgets) || widgets == Self.belowMenuBarStarter, let change = swap(to: presetBar) {
+            return change
+        }
         if isStarter, placement == .belowMenuBar, Self.isMenuBarStarter(widgets), let change = swap(to: Self.belowMenuBarStarter) { return change }
         if isStarter, placement == .top, widgets == Self.belowMenuBarStarter, let change = swap(to: Self.menuBarStarter) { return change }
         let removed = placement != .belowMenuBar ? [] : widgets.filter { widget in
@@ -467,15 +595,15 @@ struct SetupPreferences: Equatable, Codable, Sendable {
     func applying(to data: Data, configurationURL: URL? = nil,
                   context: ConfigurationContext = ConfigurationContext()) throws -> Data {
         let configuration: Configuration
+        var loader = ConfigurationLoader()
         if let configurationURL {
-            var loader = ConfigurationLoader()
             configuration = try loader.load(configurationURL, data: data, context: context)
         } else {
             configuration = try JSONDecoder().decode(Configuration.self, from: data)
         }
         if self == SetupPreferences() { return data }
         var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: data)
-        let edits = try edits(in: configuration, document: document)
+        let edits = try edits(in: configuration, document: document, widgetPackageIDs: loader.widgetPackageIDs)
         if edits.isEmpty { return data }
         var ids = configuration.widgets.map(\.id)
         for edit in edits { document = try edit.applying(to: document, widgetIDs: &ids) }
@@ -484,23 +612,15 @@ struct SetupPreferences: Equatable, Codable, Sendable {
 
     /// The edits that turn `configuration` into the bar setup builds. `document` is the configuration file's own
     /// content, which tells whether its widgets are still a starter bar.
-    func edits(in configuration: Configuration, document: [String: ConfigurationValue]? = nil) throws -> [ConfigurationEdit] {
+    func edits(in configuration: Configuration, document: [String: ConfigurationValue]? = nil,
+               widgetPackageIDs: [String: String] = [:]) throws -> [ConfigurationEdit] {
         var edits: [ConfigurationEdit] = []
         switch theme {
         case .current: break
-        case .builtIn: edits.append(ConfigurationEdit(action: .theme))
         case let .package(id, version):
             var properties: [String: ConfigurationValue] = ["id": .string(id)]
             if let version { properties["version"] = .string(version) }
             edits.append(ConfigurationEdit(action: .theme, properties: properties))
-        }
-        if appearance != .current {
-            let value: ConfigurationValue = switch appearance {
-            case .light: .string("light")
-            case .dark: .string("dark")
-            default: .null
-            }
-            edits.append(ConfigurationEdit(action: .bar, properties: ["appearance": value]))
         }
         if placement != .current {
             var properties: [String: ConfigurationValue] = ["offset": .number(0)]
@@ -509,9 +629,7 @@ struct SetupPreferences: Equatable, Codable, Sendable {
             } else if configuration.bar.belowMenuBar {
                 properties["belowMenuBar"] = .bool(false)
             }
-            if placement == .bottom {
-                properties["position"] = .string("bottom")
-            } else if configuration.bar.position == .bottom {
+            if configuration.bar.position == .bottom {
                 properties["position"] = .string("top")
             }
             edits.append(ConfigurationEdit(action: .bar, properties: properties))
@@ -519,42 +637,59 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         if let keepWindowsClear {
             edits.append(ConfigurationEdit(action: .bar, properties: ["keepWindowsClear": .bool(keepWindowsClear)]))
         }
-        if let keepNotificationsClear {
-            edits.append(ConfigurationEdit(action: .bar, properties: ["keepNotificationsClear": .bool(keepNotificationsClear)]))
+        var starter = starterChange(in: configuration, document: document)
+        let presetIDs = widgetSets.flatMap(\.ids)
+        // The preset's bar replaces a changed bar's widgets. Removing one that another file defines turns it off.
+        if !widgetSets.isEmpty {
+            starter.removed += configuration.widgets.map(\.id).filter { !presetIDs.contains($0) && !starter.removed.contains($0) }
         }
-        let starter = starterChange(in: configuration, document: document)
         for id in starter.removed { edits.append(ConfigurationEdit(action: .remove, id: id)) }
         for widget in starter.added { edits.append(ConfigurationEdit(action: .add, properties: widget)) }
         let target = starter.configuration
-        let kept = target.widgets.filter { !starter.removed.contains($0.id) }
-        if clock != .current {
-            for widget in kept {
-                if case .clock = widget.content {
-                    edits.append(ConfigurationEdit(action: .set, id: widget.id, properties: [
-                        "format": .string(Self.clockFormat(hours: clock))
-                    ]))
-                }
-            }
-        }
-        let below = placement == .belowMenuBar || placement == .current && configuration.bar.belowMenuBar
+        // A starter that becomes the preset's bar can trade a widget for another with the same ID.
+        let kept = target.widgets.filter { widget in !starter.removed.contains(widget.id) || starter.added.contains { Self.id($0) == widget.id } }
         var order = kept.map(\.id)
+        // The preset's widgets the bar already has take the preset's order among themselves.
+        let retained = presetIDs.filter(order.contains)
+        for (slot, id) in zip(order.indices.filter { retained.contains(order[$0]) }, retained) { order[slot] = id }
         var appended = configuration.widgets.map(\.id).filter { !starter.removed.contains($0) } + starter.added.map(Self.id)
-        for set in widgetSets where !(below && set == .menuBarItems) {
-            let state = set.state(in: target)
-            if state == .added || state == .conflict { continue }
-            for var widget in set.widgets {
-                let id = try widget["id"]!.decoded(String.self)
-                let enabled = set != .meetings || !deferMeetings
-                if state == .disabled {
-                    if enabled {
+        /// Before the widget that follows `id` on the preset's bar, once that one is on the bar.
+        func next(after id: String) -> Int? {
+            presetIDs.drop { $0 != id }.dropFirst().first(where: order.contains).flatMap { order.firstIndex(of: $0) }
+        }
+        for set in widgetSets where set.state(in: target) != .conflict {
+            if case let .store(id, _, position, _) = set {
+                // A Store widget turned off on the bar is turned on again where the preset has it, like a built-in one.
+                if set.state(in: target) == .disabled, widgetPackageIDs[id] == id {
+                    edits.append(ConfigurationEdit(action: .unset, properties: [
+                        "widgetOverrides": .object([id: .object(["enabled": .null])])
+                    ]))
+                    edits.append(ConfigurationEdit(action: .set, id: id, properties: ["enabled": .bool(true), "position": .string(position.rawValue)]))
+                    continue
+                }
+                guard set.state(in: target) == .available, (packages + storeWidgets).contains(where: { $0.id == id }) else { continue }
+                edits.append(ConfigurationEdit(action: .set, id: id, properties: ["position": .string(position.rawValue)]))
+                // Without an order, a package's widgets come before the file's own.
+                appended.insert(id, at: 0)
+                order.insert(id, at: next(after: id) ?? order.endIndex)
+                continue
+            }
+            for widget in added(set) {
+                let id = Self.id(widget)
+                // The set doesn't conflict, so a widget with this ID is this one.
+                if let existing = target.widgets.first(where: { $0.id == id }) {
+                    if !existing.enabled && widget["enabled"] == nil {
                         edits.append(ConfigurationEdit(action: .unset, properties: [
                             "widgetOverrides": .object([id: .object(["enabled": .null])])
                         ]))
                         edits.append(ConfigurationEdit(action: .set, id: id, properties: ["enabled": .bool(true)]))
                     }
+                    // Minimal below the menu bar shows Workspaces as numbers only, on the bar's own Workspaces too.
+                    if let workspace = widget["workspace"] {
+                        edits.append(ConfigurationEdit(action: .set, id: id, properties: ["workspace": workspace]))
+                    }
                     continue
                 }
-                if !enabled { widget["enabled"] = .bool(false) }
                 edits.append(ConfigurationEdit(action: .add, properties: widget))
                 appended.append(id)
                 let ends = ["audio", "battery", "clock", "menuBarItems"]
@@ -569,11 +704,11 @@ struct SetupPreferences: Equatable, Codable, Sendable {
                     default: false
                     }
                 }
-                order.insert(id, at: anchor.flatMap { order.firstIndex(of: $0.id) } ?? order.endIndex)
+                order.insert(id, at: next(after: id) ?? anchor.flatMap { order.firstIndex(of: $0.id) } ?? order.endIndex)
             }
         }
         if order != appended { edits.append(ConfigurationEdit(action: .reorder, ids: order)) }
-        var sources = widgetSets.compactMap { set -> WorkspaceSource? in if case let .workspaces(source) = set { source } else { nil } }
+        var sources = widgetSets.compactMap { set -> WorkspaceSource? in if case let .workspaces(source, _) = set { source } else { nil } }
         if sources.isEmpty, starter.isBelowMenuBarStarter {
             // A starter that gains Workspaces without a detected manager uses macOS Spaces, which needs none.
             if let workspaces { sources = [workspaces] } else if starter.added.contains(where: { Self.id($0) == "workspaces" }) { sources = [.spaces] }
@@ -581,47 +716,20 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         for source in sources where source != configuration.workspaceSource && WidgetSet.workspaces(source).state(in: target) != .conflict {
             edits.append(ConfigurationEdit(action: .workspaceSource, name: source.rawValue))
         }
-        for package in packages {
+        for package in packages + storeWidgets {
             edits.append(ConfigurationEdit(action: .package, properties: [
                 "id": .string(package.id), "version": .string(package.version), "enabled": .bool(true), "settings": .object(package.settings)
             ]))
         }
         return edits
     }
-}
 
-/// A setting setup saves that an active profile controls, for setup's profile notice.
-struct ProfileControlledSetting: Identifiable {
-    let title: String
-    let origin: ConfigurationOrigin
-
-    var id: String { "\(title)\n\(origin.profile ?? "")" }
-
-    /// Placement counts both the offset and `belowMenuBar`, so a profile that sets either one is named.
-    private static let placementPaths = ["bar.position", "bar.offset", "bar.belowMenuBar"]
-
-    /// The settings setup saves that active profiles control, once for each profile.
-    static func all(in configuration: Configuration?, origins: [String: ConfigurationOrigin]) -> [ProfileControlledSetting] {
-        let settings = [("Appearance", ["bar.appearance"]), ("Placement", placementPaths),
-                        ("Window clearance", ["bar.keepWindowsClear"]), ("Notification clearance", ["bar.keepNotificationsClear"])]
-            + (configuration?.widgets.flatMap { widget -> [(String, [String])] in
-                var settings = [(widget.id, ["widgets.\(widget.id).enabled"])]
-                if case .clock = widget.content { settings.append(("Clock \(widget.id)", ["widgets.\(widget.id).format"])) }
-                return settings
-            } ?? [])
-        return settings.flatMap { controlled(title: $0, paths: $1, origins: origins) }
-    }
-
-    /// The active profiles that control where the bar sits, which setup names on the step that asks.
-    static func placement(origins: [String: ConfigurationOrigin]) -> [ProfileControlledSetting] {
-        controlled(title: "Placement", paths: placementPaths, origins: origins)
-    }
-
-    private static func controlled(title: String, paths: [String], origins: [String: ConfigurationOrigin]) -> [ProfileControlledSetting] {
-        var profiles = Set<String>()
-        return paths.compactMap { path in
-            guard let origin = origins[path], let profile = origin.profile, profiles.insert(profile).inserted else { return nil }
-            return ProfileControlledSetting(title: title, origin: origin)
+    /// `set`'s widgets as setup adds them: Meetings turned off while it waits for Calendars.
+    private func added(_ set: WidgetSet) -> [[String: ConfigurationValue]] {
+        set.widgets.map { widget in
+            var widget = widget
+            if set == .meetings && deferMeetings { widget["enabled"] = .bool(false) }
+            return widget
         }
     }
 }

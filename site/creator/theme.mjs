@@ -6,6 +6,7 @@ export const RESERVED_IDS = new Set([
   ...BASE_IDS,
   "graphite", "island", "menu-bar", "minimal", "paper", "slate", "terminal",
   "blueprint", "broadsheet", "brutalist", "everforest", "handheld", "kanagawa", "platinum", "rose-pine", "synthwave",
+  "clear", "glass", "tonal", "slim", "dot", "gloss", "sticker", "classic",
 ]);
 
 export function slug(name) {
@@ -232,7 +233,7 @@ export function resolveTheme(base, config, appearance) {
 }
 
 const docs = "https://github.com/stablebox/StableBar/blob/main/docs/";
-const indicatorIs = indicator => state => (state.config.workspaceDefaults?.indicator ?? "background") === indicator;
+const indicatorIs = (...indicators) => state => indicators.includes(state.config.workspaceDefaults?.indicator ?? "background");
 
 function control(id, label, kind, paths, help, guide, appliesWhen,
   { range = [0, 40], step = 1, unit = "pt", slider = false } = {}) {
@@ -311,7 +312,7 @@ export const CONTROLS = [
   control("widgets.shadowRadius", "Shadow radius", "number", ["defaults.shadowRadius"],
     "Set the shadow or glow radius in points.", "styling.md#widget-styles", undefined, { range: [0, 1000] }),
   select("workspaces.indicator", "Indicator", ["workspaceDefaults.indicator"],
-    "Choose background, underline or none.", "widgets.md#workspace-appearance", ["background", "underline", "none"]),
+    "Choose background, underline, cells or none.", "widgets.md#workspace-appearance", ["background", "underline", "cells", "none"]),
   control("workspaces.appIconSize", "App icon size", "number",
     ["workspaceDefaults.appStyle.width", "workspaceDefaults.appStyle.height"],
     "Set native app icons' width and height in points.", "widgets.md#workspace-appearance", undefined,
@@ -321,9 +322,9 @@ export const CONTROLS = [
   control("workspaces.focusedForeground", "Focused text", "color", ["workspaceDefaults.style.states.focused.foreground"],
     "Set the text color of the focused workspace.", "widgets.md#workspace-appearance"),
   control("workspaces.focusedFill", "Focused fill", "color", ["workspaceDefaults.style.states.focused.background"],
-    "Set the focused workspace's background.", "widgets.md#workspace-appearance", indicatorIs("background")),
+    "Set the focused workspace's background.", "widgets.md#workspace-appearance", indicatorIs("background", "cells")),
   control("workspaces.cornerRadius", "Indicator corners", "number", ["workspaceDefaults.style.cornerRadius"],
-    "Round the background indicator's corners.", "widgets.md#workspace-appearance", indicatorIs("background"),
+    "Round the indicator's corners.", "widgets.md#workspace-appearance", indicatorIs("background", "cells"),
     { range: [0, 1000] }),
   ...[
     ["Width", "width", "Underline width"], ["Height", "height", "Underline height"],
